@@ -19,8 +19,12 @@ import javax.tools.Diagnostic;
 import java.util.Set;
 
 @SupportedAnnotationTypes("ai.confiqure.Confiqure")
-@SupportedSourceVersion(SourceVersion.RELEASE_11)
 public class ConfiqureProcessor extends AbstractProcessor {
+
+    @Override
+    public SourceVersion getSupportedSourceVersion() {
+        return SourceVersion.latestSupported();
+    }
 
     private Trees trees;
     private TreeMaker treeMaker;
@@ -90,7 +94,7 @@ public class ConfiqureProcessor extends AbstractProcessor {
         JCTree.JCMethodInvocation init = treeMaker.Apply(
             List.nil(),
             treeMaker.Select(
-                treeMaker.Ident(names.fromString("ConfiqureKeys")),
+                qualifiedIdent("ai.confiqure.ConfiqureKeys"),
                 names.fromString("generate")),
             List.nil());
 
