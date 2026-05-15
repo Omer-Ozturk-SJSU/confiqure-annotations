@@ -6,7 +6,7 @@
 
     <groupId>ai.confiqure</groupId>
     <artifactId>confiqure-annotation-java</artifactId>
-    <version>0.3.0</version>
+    <version>1.0.0</version>
     <packaging>jar</packaging>
 
     <name>confiqure annotation (Java)</name>
@@ -31,6 +31,8 @@
     </developers>
 
     <scm>
+        <connection>scm:git:git://github.com/Omer-Ozturk-SJSU/confiqure-annotations.git</connection>
+        <developerConnection>scm:git:ssh://github.com/Omer-Ozturk-SJSU/confiqure-annotations.git</developerConnection>
         <url>https://github.com/Omer-Ozturk-SJSU/confiqure-annotations</url>
     </scm>
 
@@ -87,6 +89,60 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>3.6.3</version>
+                <configuration>
+                    <additionalJOptions>
+                        <additionalJOption>--add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED</additionalJOption>
+                        <additionalJOption>--add-exports=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED</additionalJOption>
+                        <additionalJOption>--add-exports=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED</additionalJOption>
+                        <additionalJOption>--add-exports=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED</additionalJOption>
+                        <additionalJOption>--add-exports=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED</additionalJOption>
+                        <additionalJOption>--add-exports=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED</additionalJOption>
+                        <additionalJOption>--add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED</additionalJOption>
+                        <additionalJOption>--add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED</additionalJOption>
+                    </additionalJOptions>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-gpg-plugin</artifactId>
+                <version>3.2.4</version>
+                <executions>
+                    <execution>
+                        <id>sign-artifacts</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>sign</goal>
+                        </goals>
+                        <configuration>
+                            <keyname>4A858ECEFAF7230F</keyname>
+                            <executable>C:\Program Files\Git\usr\bin\gpg.exe</executable>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <version>0.6.0</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <publishingServerId>central</publishingServerId>
+                    <autoPublish>true</autoPublish>
+                    <waitUntil>uploaded</waitUntil>
+                </configuration>
             </plugin>
         </plugins>
     </build>
