@@ -3,6 +3,7 @@ package ai.confiqure;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.sun.source.util.Trees;
 import com.sun.tools.javac.code.Flags;
+import com.sun.tools.javac.code.TypeTag;
 import com.sun.tools.javac.processing.JavacProcessingEnvironment;
 import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.tree.TreeMaker;
@@ -79,7 +80,8 @@ public class ConfiqureProcessor extends AbstractProcessor {
 
         JCTree.JCVariableDecl field = makeField();
         JCTree.JCMethodDecl getter = makeGetter();
-        classDecl.defs = classDecl.defs.prependList(List.of(field, getter));
+        JCTree.JCMethodDecl setter = makeSetter();
+        classDecl.defs = classDecl.defs.prependList(List.of(field, getter, setter));
     }
 
     private JCTree.JCVariableDecl makeField() {
@@ -91,18 +93,11 @@ public class ConfiqureProcessor extends AbstractProcessor {
             ))
         );
 
-        JCTree.JCMethodInvocation init = treeMaker.Apply(
-            List.nil(),
-            treeMaker.Select(
-                qualifiedIdent("ai.confiqure.ConfiqureKeys"),
-                names.fromString("generate")),
-            List.nil());
-
         return treeMaker.VarDef(
             treeMaker.Modifiers(Flags.PRIVATE, List.of(jsonProp)),
             names.fromString("confiqureKey"),
             treeMaker.Ident(names.fromString("String")),
-            init);
+            null);
     }
 
     private JCTree.JCMethodDecl makeGetter() {
@@ -115,6 +110,33 @@ public class ConfiqureProcessor extends AbstractProcessor {
             treeMaker.Ident(names.fromString("String")),
             List.nil(),
             List.nil(),
+            List.nil(),
+            body,
+            null);
+    }
+
+    private JCTree.JCMethodDecl makeSetter() {
+        JCTree.JCVariableDecl param = treeMaker.VarDef(
+            treeMaker.Modifiers(Flags.PARAMETER),
+            names.fromString("confiqureKey"),
+            treeMaker.Ident(names.fromString("String")),
+            null);
+
+        JCTree.JCAssign assign = treeMaker.Assign(
+            treeMaker.Select(
+                treeMaker.Ident(names.fromString("this")),
+                names.fromString("confiqureKey")),
+            treeMaker.Ident(names.fromString("confiqureKey")));
+
+        JCTree.JCBlock body = treeMaker.Block(0,
+            List.of(treeMaker.Exec(assign)));
+
+        return treeMaker.MethodDef(
+            treeMaker.Modifiers(Flags.PUBLIC),
+            names.fromString("setConfiqureKey"),
+            treeMaker.TypeIdent(TypeTag.VOID),
+            List.nil(),
+            List.of(param),
             List.nil(),
             body,
             null);
