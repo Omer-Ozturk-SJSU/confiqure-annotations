@@ -13,8 +13,8 @@ import java.lang.annotation.Target;
  * <pre>
  * &#64;Confiqure(
  *     end      = "/notifications",
- *     type     = "single",
- *     tools    = {"Amazon_Connect", "Ebay_Connect"},
+ *     type     = Confiqure.Type.SINGLE,
+ *     scope    = Confiqure.Scope.LIMITED,
  *     callback = "https://myapp.com/webhooks/confiqure"
  * )
  * public class Notifications { ... }
@@ -26,12 +26,30 @@ public @interface Confiqure {
     /** Chat endpoint segment. Defaults to snake_case of the class name when blank. */
     String end() default "";
 
-    /** Configuration shape. Defaults to "single". */
-    String type() default "single";
+    /** Configuration shape: SINGLE (one record per user) or MULTI (table of records). */
+    Type type() default Type.SINGLE;
 
-    /** Names of workspace tools referenced during chat (must match ConfigTool rows). */
-    String[] tools() default {};
+    /** Chat context scope: LIMITED (this endpoint only) or UNLIMITED (can navigate all endpoints). */
+    Scope scope() default Scope.LIMITED;
 
     /** End-of-chat callback URL. Defaults to the workspace's defaultCallbackUrl when blank. */
     String callback() default "";
+
+    enum Type {
+        SINGLE,
+        MULTI
+    }
+
+    enum Scope {
+        LIMITED,
+        UNLIMITED
+    }
+
+    /** Marks a controller method as a tool the chat agent can invoke during a session. */
+    @Target(ElementType.METHOD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Tool {
+        /** Tool name. Defaults to the method name when blank. */
+        String name() default "";
+    }
 }
