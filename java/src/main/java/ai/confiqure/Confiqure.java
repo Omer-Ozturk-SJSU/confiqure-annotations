@@ -15,8 +15,7 @@ import java.lang.annotation.Target;
  *     end      = "/notifications",
  *     type     = Confiqure.Type.SINGLE,
  *     scope    = Confiqure.Scope.LIMITED,
- *     tools    = {"SEND_TEST_NOTIFICATION"},
- *     callback = "https://myapp.com/webhooks/confiqure"
+ *     tools    = {"SEND_TEST_NOTIFICATION"}
  * )
  * public class Notifications { ... }
  * </pre>
@@ -36,9 +35,6 @@ public @interface Confiqure {
     /** Names of @Confiqure.Tool methods this endpoint can invoke during chat. */
     String[] tools() default {};
 
-    /** End-of-chat callback URL. Defaults to the workspace's defaultCallbackUrl when blank. */
-    String callback() default "";
-
     enum Type {
         SINGLE,
         MULTI
@@ -56,4 +52,10 @@ public @interface Confiqure {
         /** Tool name. Defaults to the method name when blank. */
         String name() default "";
     }
+
+    /** Marks a controller method as the workspace's default callback hook.
+     *  Receives lifecycle events (onStart, onComplete, onTimeout) with confiqureKeys. */
+    @Target(ElementType.METHOD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface DefaultCallbackHook {}
 }
