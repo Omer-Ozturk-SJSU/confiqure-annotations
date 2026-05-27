@@ -15,6 +15,7 @@ import java.lang.annotation.Target;
  *     end      = "/notifications",
  *     type     = Confiqure.Type.SINGLE,
  *     scope    = Confiqure.Scope.LIMITED,
+ *     tools    = {"SEND_TEST_NOTIFICATION"},
  *     callback = "https://myapp.com/webhooks/confiqure"
  * )
  * public class Notifications { ... }
@@ -31,6 +32,9 @@ public @interface Confiqure {
 
     /** Chat context scope: LIMITED (this endpoint only) or UNLIMITED (can navigate all endpoints). */
     Scope scope() default Scope.LIMITED;
+
+    /** Names of @Confiqure.Tool methods this endpoint can invoke during chat. */
+    String[] tools() default {};
 
     /** End-of-chat callback URL. Defaults to the workspace's defaultCallbackUrl when blank. */
     String callback() default "";
