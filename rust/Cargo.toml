@@ -1,0 +1,12 @@
+[package]
+name = "confiqure"
+version = "0.1.0"
+edition = "2021"
+description = "Attribute macro marker for confiqure.ai configuration targets"
+license = "Apache-2.0"
+repository = "https://github.com/confiqure/confiqure"
+
+[lib]
+proc-macro = true
+
+[dependencies]
