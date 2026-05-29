@@ -19,6 +19,24 @@ import java.lang.annotation.Target;
  * )
  * public class Notifications { ... }
  * </pre>
+ *
+ * <p>Tools come in two kinds, both declared once as a {@link Tool}-annotated
+ * method and referenced by name in {@link #tools()}:
+ * <ul>
+ *   <li><b>Server-side</b> ({@code serverSide=true}, the default) — a real
+ *       controller method confiqure invokes over HTTP. Returns data or performs
+ *       a backend action; no UI.</li>
+ *   <li><b>Frontend</b> ({@code serverSide=false}) — a contract-stub method
+ *       (body never runs on the backend) whose handler runs in the host's
+ *       browser via the embed SDK. Use for anything needing a UI (OAuth, a
+ *       picker, rendering a view). The method signature still carries the I/O
+ *       contract: its {@code @RequestBody} DTO is the input, its return type the
+ *       output. Example:
+ *       <pre>
+ *       &#64;Confiqure.Tool(name = "show_report", serverSide = false)
+ *       public String showReport(&#64;RequestBody StockFilterData filter) { return null; }
+ *       </pre></li>
+ * </ul>
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
@@ -45,12 +63,24 @@ public @interface Confiqure {
         UNLIMITED
     }
 
-    /** Marks a controller method as a tool the chat agent can invoke during a session. */
+    /** Marks a method as a tool the chat agent can invoke during a session. */
     @Target(ElementType.METHOD)
     @Retention(RetentionPolicy.RUNTIME)
     @interface Tool {
         /** Tool name. Defaults to the method name when blank. */
         String name() default "";
+
+        /**
+         * {@code true} (default): a server-side tool — confiqure dispatches an
+         * HTTP call to this controller method (returns data / performs a backend
+         * action, no UI).
+         * <p>{@code false}: a frontend tool — this method is a contract stub
+         * whose handler runs in the host's browser via the embed SDK. The method
+         * signature still defines the I/O contract (its {@code @RequestBody} DTO
+         * is the input, its return type the output), but the body never runs on
+         * the backend. Use for anything needing a UI (OAuth, pickers, rendering).
+         */
+        boolean serverSide() default true;
     }
 
     /** Marks a controller method as the workspace's default callback hook.
