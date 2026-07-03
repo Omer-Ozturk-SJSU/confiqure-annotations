@@ -1,0 +1,2 @@
+# confiqure-spring — registers the ConfiqureCallback argument resolver for @Confiqure.Tool(async=true)
+ai.confiqure.spring.ConfiqureAutoConfiguration

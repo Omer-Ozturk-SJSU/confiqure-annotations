@@ -81,6 +81,36 @@ public @interface Confiqure {
          * the backend. Use for anything needing a UI (OAuth, pickers, rendering).
          */
         boolean serverSide() default true;
+
+        /**
+         * Server-side reply discipline (ignored when {@code serverSide=false}).
+         * <p>{@code false} (default) — <b>synchronous</b>: confiqure waits on the HTTP call and
+         * takes the method's return value as the tool result. Your handler is plain Spring — the
+         * request body IS your DTO (no envelope), and {@code confiqureKey} is injected into it:
+         * <pre>
+         * &#64;Confiqure.Tool(name = "lookup_supplier")
+         * &#64;PostMapping("/supplier")
+         * public SupplierDto lookup(&#64;RequestBody SupplierQuery q) { return service.lookup(q); }
+         * </pre>
+         * <p>{@code true} — <b>asynchronous</b>: confiqure ACKs immediately and you deliver the
+         * result later. The {@code ai.confiqure:confiqure-spring} SDK injects a {@code
+         * ConfiqureCallback} that does the header-reading + signed POST for you (the same {@code
+         * confiqureKey} rides your {@code @RequestBody} DTO as in the sync case):
+         * <pre>
+         * &#64;Confiqure.Tool(name = "analyze_supplier", async = true)
+         * &#64;PostMapping("/analyze")
+         * public ResponseEntity&lt;Void&gt; analyze(&#64;RequestBody SupplierQuery q, ConfiqureCallback reply) {
+         *     CompletableFuture.supplyAsync(() -&gt; service.slowAnalysis(q))
+         *         .whenComplete((r, ex) -&gt; { if (ex != null) reply.fail(ex.getMessage()); else reply.reply(r); });
+         *     return ResponseEntity.accepted().build();   // ACK now; the result follows
+         * }
+         * </pre>
+         * Without the SDK, read the {@code X-Confiqure-Tool-Call-Id} + {@code X-Confiqure-Reply-Url}
+         * headers and POST {@code {"result":…}} back yourself. Use async only when the work outlives
+         * one request (long jobs, human-in-the-loop, webhooks); ~90% of tools are synchronous, and
+         * even a slow sync handler has a 5-minute window before async is warranted.
+         */
+        boolean async() default false;
     }
 
     /** Marks a controller method as the workspace's default callback hook.
