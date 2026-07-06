@@ -1,6 +1,7 @@
 package ai.confiqure;
 
 import java.lang.annotation.ElementType;
+import java.lang.annotation.Repeatable;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
@@ -118,4 +119,129 @@ public @interface Confiqure {
     @Target(ElementType.METHOD)
     @Retention(RetentionPolicy.RUNTIME)
     @interface DefaultCallbackHook {}
+
+    /**
+     * Declarative flow gate on a single field: the confiqure conversation may only WRITE this
+     * field when the {@link #requires()} predicate is {@code true} over the root instance's
+     * current values. This turns a sequencing rule that used to live in Javadoc prose ("don't
+     * collect the site URL until the legal terms are accepted") into a machine-enforced gate.
+     * The model proposes; the engine disposes — a well-behaved model never trips the gate, and a
+     * misbehaving one gets a structured, recoverable correction instead of a silent bad write.
+     *
+     * <p><b>Predicate grammar</b> (the same grammar {@link ToolGate#requires()} and
+     * {@link SectionGate#requires()} use). It is evaluated over a flat, dotted-key view of the
+     * root instance's current values — a nested field is addressed by its path from the root
+     * (e.g. {@code quietHours.enabled}). It is safe by construction: no method calls, no
+     * arithmetic, no reflection.
+     * <pre>
+     * expr       := or
+     * or         := and ('||' and)*
+     * and        := unary ('&amp;&amp;' unary)*
+     * unary      := '!' unary | '(' expr ')' | comparison
+     * comparison := operand (('=='|'!='|'&lt;'|'&lt;='|'&gt;'|'&gt;=') operand)?   // a bare operand is a truthy boolean test
+     *             | operand 'in' '{' literal (',' literal)* '}'   // membership
+     * operand    := literal | fieldPath
+     * literal    := number | 'single-quoted' | "double-quoted" | true | false | null
+     * fieldPath  := ident ('.' ident)*
+     * </pre>
+     * Semantics: {@code ==}/{@code !=} compare loosely across String/Boolean/Number (numeric when
+     * both sides parse as numbers, else string equality; {@code field == true} matches both
+     * {@code Boolean.TRUE} and the string {@code "true"}). {@code &lt; &lt;= &gt; &gt;=} apply only
+     * when both operands are numeric, otherwise they are {@code false}. A missing/unset field is
+     * {@code null}; any comparison involving {@code null} is {@code false} EXCEPT {@code x == null}
+     * (true when missing) and {@code x != null}. A bare {@code fieldPath} means {@code fieldPath == true}.
+     *
+     * <p><b>Examples</b>
+     * <pre>
+     * &#64;Confiqure.Gate(requires = "userAcceptedLegalTermsRisks == true",
+     *                 message  = "Please accept the legal terms first — then I can save your site URL.")
+     * private String siteUrl;
+     *
+     * &#64;Confiqure.Gate(requires = "plan in {'pro', 'enterprise'} &amp;&amp; seatCount &gt;= 5")
+     * private boolean advancedAnalyticsEnabled;
+     * </pre>
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Gate {
+        /** Predicate (grammar above) that must hold over the root instance's current values before this field may be written. */
+        String requires();
+
+        /** Optional coaching shown to the conversation when the gate blocks a write. Defaults to the predicate text. */
+        String message() default "";
+    }
+
+    /**
+     * Declarative flow gate on a whole nested section: ANY write at or under this field's path is
+     * only permitted while the {@link #requires()} predicate is {@code true} over the root
+     * instance's current values. Use it to lock an entire sub-object (e.g. a whole
+     * {@code billingDetails} block) behind a prerequisite, instead of repeating {@link Gate} on
+     * every leaf. Predicate grammar and semantics are identical to {@link Gate}.
+     *
+     * <pre>
+     * &#64;Confiqure.SectionGate(requires = "userAcceptedLegalTermsRisks == true",
+     *                        message  = "Accept the terms first, then we can set up your product interests.")
+     * private InterestedProductCategories interestedProductCategories;
+     * </pre>
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface SectionGate {
+        /** Predicate (see {@link Gate}) that must hold before any field at or under this path may be written. */
+        String requires();
+
+        /** Optional coaching shown to the conversation when the section gate blocks a write. Defaults to the predicate text. */
+        String message() default "";
+    }
+
+    /**
+     * Marks a field as engine- or tool-populated ONLY: every conversation-proposed write to it (or
+     * to any field beneath it) is rejected. Use it for fields a host tool fills in — an analysis
+     * result, a computed score, a system-assigned id — that the chat must never author or overwrite.
+     * The field fills automatically as a side effect of the work that produces it.
+     *
+     * <pre>
+     * &#64;Confiqure.SystemOnly
+     * private SiteAnalysis siteAnalysis;   // written by the SUPPLIER_SITE_ANALYSER tool, never by chat
+     * </pre>
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface SystemOnly {}
+
+    /**
+     * Declarative flow gate on a host tool, declared on the endpoint (root) class: the named tool
+     * is only dispatchable while the {@link #requires()} predicate is {@code true} over the bound
+     * instance's current values. This enforces call-ordering rules ("never call the analyser before
+     * the credentials are set") without the model having to remember them. Repeatable — declare one
+     * per gated tool. Predicate grammar and semantics are identical to {@link Gate}.
+     *
+     * <pre>
+     * &#64;Confiqure(end = "/suppliers", tools = {"SUPPLIER_SITE_ANALYSER"})
+     * &#64;Confiqure.ToolGate(tool     = "SUPPLIER_SITE_ANALYSER",
+     *                     requires = "siteUrl != null &amp;&amp; credentialsVerified == true",
+     *                     message  = "I need a verified site URL before I can run the analysis.")
+     * public class SupplierConfig { ... }
+     * </pre>
+     */
+    @Target(ElementType.TYPE)
+    @Retention(RetentionPolicy.RUNTIME)
+    @Repeatable(ToolGates.class)
+    @interface ToolGate {
+        /** The tool name (as referenced in {@link Confiqure#tools()}) this gate governs. */
+        String tool();
+
+        /** Predicate (see {@link Gate}) that must hold over the bound instance before the tool may be dispatched. */
+        String requires();
+
+        /** Optional coaching shown to the conversation when the tool gate blocks a dispatch. Defaults to the predicate text. */
+        String message() default "";
+    }
+
+    /** Container for repeated {@link ToolGate} declarations on one endpoint class. Populated automatically by {@code @Repeatable}. */
+    @Target(ElementType.TYPE)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface ToolGates {
+        ToolGate[] value();
+    }
 }
