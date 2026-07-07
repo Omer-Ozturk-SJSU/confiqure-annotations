@@ -244,4 +244,71 @@ public @interface Confiqure {
     @interface ToolGates {
         ToolGate[] value();
     }
+
+    /**
+     * Verbatim, auditable consent capture on a Boolean field. The annotated field is the capture
+     * target: the conversation can NEVER write it (it is implicitly {@link SystemOnly}) — only the
+     * end user's explicit Accept/Decline click on the consent card the engine renders can set it.
+     * The engine shows {@link #text()} word-for-word (an LLM never generates or paraphrases legal
+     * text) and records the decision — with a version hash of the exact wording shown — as a
+     * compliance audit row ("user U accepted consent v3 at T in conversation C").
+     *
+     * <p>Gate the fields that depend on the consent with plain {@link Gate}/{@link SectionGate}
+     * predicates over this Boolean — consent composes with gating instead of being its own gate:
+     *
+     * <pre>
+     * &#64;Confiqure.Consent(id = "supplier-scraping",
+     *                    text = "By continuing you confirm you have the right to access this "
+     *                         + "supplier site with the credentials you provide, and you accept "
+     *                         + "the risks described in our automation terms.")
+     * private Boolean userAcceptedLegalTermsRisks;
+     *
+     * &#64;Confiqure.Gate(requires = "userAcceptedLegalTermsRisks == true",
+     *                 message  = "The legal terms must be accepted first.")
+     * private String siteUrl;
+     * </pre>
+     *
+     * <p>The text is inline source (string literals, {@code +} concatenation allowed) — it ships
+     * with the class on push, so the engine binds each acceptance to the exact wording that was live.
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Consent {
+        /** Stable consent identifier, e.g. {@code "supplier-scraping"} — the audit rows key on it. */
+        String id();
+
+        /** The verbatim consent/legal text shown to the user. Never paraphrased, never model-generated. */
+        String text();
+    }
+
+    /**
+     * Classifies a String field as a secret (password, API token, TOTP seed, …). The engine keeps
+     * the plaintext OUT of the conversation entirely: the user enters the value in a masked input
+     * that posts directly to the engine, the stored configuration carries an opaque
+     * {@code secret_ref:…} reference, and the real value — encrypted at rest — is substituted back
+     * ONLY where your application receives the data (tool-call bodies and the data API). The chat
+     * model, the transcript, and the logs only ever see the reference.
+     *
+     * <p>Gate predicates may test whether a secret is present ({@code password != null}) but never
+     * its value — a value comparison against a secret field fails the push.
+     *
+     * <pre>
+     * &#64;Confiqure.Secret(kind = Confiqure.SecretKind.PASSWORD)
+     * private String password;
+     * </pre>
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Secret {
+        /** What kind of credential this is (drives masking hints and audit labels). */
+        SecretKind kind() default SecretKind.PASSWORD;
+    }
+
+    /** The kinds of secret a {@link Secret} field can hold. */
+    enum SecretKind {
+        PASSWORD,
+        TOKEN,
+        TOTP,
+        OTHER
+    }
 }
