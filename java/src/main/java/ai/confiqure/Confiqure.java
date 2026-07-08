@@ -311,4 +311,30 @@ public @interface Confiqure {
         TOTP,
         OTHER
     }
+
+    /**
+     * Opts a {@code type = MULTI} configuration class OUT of chat deletion. By default a MULTI
+     * endpoint's saved instances can be deleted from chat — the user asks, the engine shows a
+     * direct-bind confirmation card, and only the user's click disposes (soft-delete; the data is
+     * staff-recoverable, and your application is notified via the {@code config.deleted} /
+     * {@code config.bulk_deleted} lifecycle webhooks). Add {@code @Confiqure.Protect} to a class
+     * whose instances must NEVER be chat-deletable — audit logs, immutable records, anything whose
+     * removal should only ever happen through your own application:
+     *
+     * <pre>
+     * &#64;Confiqure(end = "/audit-entries", type = Confiqure.Type.MULTI)
+     * &#64;Confiqure.Protect
+     * public class AuditEntry { ... }
+     * </pre>
+     *
+     * <p>SINGLE endpoints are never chat-deletable regardless (a SINGLE record is reset by
+     * reconfiguring it, not deleted), so {@code @Protect} is meaningful only on MULTI classes.
+     * The opt-out is capability-level and composes with {@link ToolGate} on {@code nf_delete} (the
+     * conditional layer — "deletable, but not while an analysis is running"). Adding or removing
+     * {@code @Protect} takes effect on the class's next push; existing saved instances are
+     * unaffected by the annotation itself.
+     */
+    @Target(ElementType.TYPE)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Protect {}
 }
