@@ -13,10 +13,11 @@ import java.lang.annotation.Target;
  *
  * <pre>
  * &#64;Confiqure(
- *     end      = "/notifications",
- *     type     = Confiqure.Type.SINGLE,
- *     scope    = Confiqure.Scope.LIMITED,
- *     tools    = {"SEND_TEST_NOTIFICATION"}
+ *     end       = "/notifications",
+ *     type      = Confiqure.Type.SINGLE,
+ *     scope     = Confiqure.Scope.LIMITED,
+ *     dataScope = Confiqure.DataScope.ORG,
+ *     tools     = {"SEND_TEST_NOTIFICATION"}
  * )
  * public class Notifications { ... }
  * </pre>
@@ -54,6 +55,20 @@ public @interface Confiqure {
     /** Names of @Confiqure.Tool methods this endpoint can invoke during chat. */
     String[] tools() default {};
 
+    /**
+     * Who a saved configuration belongs to. {@code ORG} (default) — the record is shared across
+     * everyone in the end user's organization: when the host mints an embed token carrying an
+     * {@code organizationId}, all members of that org see and edit ONE shared instance (suppliers,
+     * business model, repricer settings — anything org-wide). {@code USER} opts a genuinely personal
+     * endpoint out, so each end user gets their own private record even within an org (personal
+     * credentials, individual preferences).
+     *
+     * <p>Org sharing activates only when the host's token mint sends {@code organizationId}; an
+     * org-less host, or a token without one, behaves exactly as a per-user endpoint. Declared, never
+     * inferred — like {@link #type()}/{@link #scope()}, this is read straight from the annotation.
+     */
+    DataScope dataScope() default DataScope.ORG;
+
     enum Type {
         SINGLE,
         MULTI
@@ -62,6 +77,12 @@ public @interface Confiqure {
     enum Scope {
         LIMITED,
         UNLIMITED
+    }
+
+    /** Ownership of a saved configuration: shared across an organization, or private to each end user. */
+    enum DataScope {
+        ORG,
+        USER
     }
 
     /** Marks a method as a tool the chat agent can invoke during a session. */
