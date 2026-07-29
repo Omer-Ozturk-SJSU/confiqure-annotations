@@ -46,8 +46,34 @@ public @interface Confiqure {
     /** Chat endpoint segment. Defaults to snake_case of the class name when blank. */
     String end() default "";
 
-    /** Configuration shape: SINGLE (one record per user) or MULTI (table of records). */
+    /**
+     * What this class is: SINGLE (one configuration record per user), MULTI (a table of records),
+     * or {@link Type#FACTS} — not a configuration at all, but the read-only user-facts contract
+     * your application serves back to confiqure (see {@link #callback()}).
+     */
     Type type() default Type.SINGLE;
+
+    /**
+     * ONLY meaningful with {@code type = }{@link Type#FACTS}: the relative path of the {@code GET}
+     * endpoint in YOUR application that returns the current facts for one end user. confiqure calls
+     * {@code hostBaseUrl + callback} with the user's handle and binds the JSON response into this
+     * class.
+     *
+     * <pre>
+     * &#64;Confiqure(type = Confiqure.Type.FACTS, callback = "/api/confiqure/user-facts")
+     * public class SellerFacts {
+     *     // The product categories this seller actually sells in.
+     *     private List&lt;String&gt; sellingCategories;
+     *     // How many of their listings are currently stranded.
+     *     private Integer strandedCount;
+     * }
+     * </pre>
+     *
+     * <p>Comment every field — the comment is what tells the model what the fact MEANS.
+     * Ignored on SINGLE/MULTI classes (lifecycle callbacks stay workspace-level via
+     * {@link DefaultCallbackHook}).
+     */
+    String callback() default "";
 
     /** Chat context scope: LIMITED (this endpoint only) or UNLIMITED (can navigate all endpoints). */
     Scope scope() default Scope.LIMITED;
@@ -70,8 +96,23 @@ public @interface Confiqure {
     DataScope dataScope() default DataScope.ORG;
 
     enum Type {
+        /** One configuration record per end user. */
         SINGLE,
-        MULTI
+        /** A table of configuration records per end user. */
+        MULTI,
+        /**
+         * Not a configuration — the <b>user-facts contract</b>. The class declares what your
+         * application already knows about an end user (their categories, their counts, their open
+         * issues); its FIELD COMMENTS tell the model what each fact means. confiqure {@code GET}s
+         * {@link #callback()} for the acting user, binds the JSON into this class, and puts the
+         * compact core in front of the model so the chat stops asking for things you already know.
+         *
+         * <p>Read-only and host-owned: the conversation never writes a FACTS class, it is not a chat
+         * endpoint, and it holds no saved instances. Fetches are cached for 24 hours and refreshed in
+         * the background — a slow or down endpoint never delays a chat, it just serves the last
+         * known facts.
+         */
+        FACTS
     }
 
     enum Scope {
