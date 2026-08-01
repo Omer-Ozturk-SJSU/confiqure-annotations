@@ -128,7 +128,10 @@
                         </goals>
                         <configuration>
                             <keyname>4A858ECEFAF7230F</keyname>
-                            <executable>C:\Program Files\Git\usr\bin\gpg.exe</executable>
+                            <!-- No <executable>: the plugin's own `gpg.executable` user property
+                                 defaults to `gpg` on PATH, which resolves on Linux and inside Git
+                                 Bash alike. Override with -Dgpg.executable=... if you must run
+                                 from PowerShell, where gpg is not on PATH. -->
                         </configuration>
                     </execution>
                 </executions>
