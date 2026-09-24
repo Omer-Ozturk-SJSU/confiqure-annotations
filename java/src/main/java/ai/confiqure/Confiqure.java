@@ -22,6 +22,24 @@ import java.lang.annotation.Target;
  * public class Notifications { ... }
  * </pre>
  *
+ * <p><b>Since 1.8 — the object vocabulary.</b> A configuration class is an <i>object</i>:
+ * something the end user would call "my X". Declare what it is with ONE of four
+ * annotations instead of {@code type}/{@code dataScope}/{@code scope}:
+ * <pre>
+ *                        one record per owner        many records per owner
+ *   shared by the org    &#64;Confiqure.Setting          &#64;Confiqure.List
+ *   private to a user    &#64;Confiqure.User.Setting     &#64;Confiqure.User.List
+ * </pre>
+ * A class used only as a field type inside an object (an address, a schedule) is a
+ * <i>part</i>: it needs no annotation and has no records of its own. A field whose type is
+ * another object class is a <i>reference</i> to that object's record(s), never a copy of it.
+ * A {@link List} object names the field that identifies a record with {@link Identity}.
+ * Tools are grouped in <i>tool classes</i> ({@link Tool} on a class) whose Javadoc is the
+ * business flow the chat follows; an object lists its tool classes in {@code tools()}.
+ * The plain {@code @Confiqure(end, type, dataScope, scope, tools)} form still compiles and is
+ * mapped onto this vocabulary (SINGLE → Setting, MULTI → List, USER → User.*); {@code scope}
+ * is ignored — the chat is no longer fenced to one endpoint.
+ *
  * <p>Tools come in two kinds, both declared once as a {@link Tool}-annotated
  * method and referenced by name in {@link #tools()}:
  * <ul>
@@ -75,7 +93,13 @@ public @interface Confiqure {
      */
     String callback() default "";
 
-    /** Chat context scope: LIMITED (this endpoint only) or UNLIMITED (can navigate all endpoints). */
+    /**
+     * Chat context scope: LIMITED (this endpoint only) or UNLIMITED (can navigate all endpoints).
+     *
+     * @deprecated since 1.8 — ignored. The chat is never fenced to one endpoint any more: it opens
+     * on the screen's context and reaches any object or tool class the conversation needs.
+     */
+    @Deprecated
     Scope scope() default Scope.LIMITED;
 
     /** Names of @Confiqure.Tool methods this endpoint can invoke during chat. */
@@ -126,11 +150,135 @@ public @interface Confiqure {
         USER
     }
 
-    /** Marks a method as a tool the chat agent can invoke during a session. */
-    @Target(ElementType.METHOD)
+    /**
+     * An object shared by the whole organization with exactly ONE record per organization
+     * (account settings, the repricer's account-wide rules, the business model). The chat reads
+     * and edits that one record; it never creates a second one. Equivalent to the old
+     * {@code @Confiqure(type = SINGLE, dataScope = ORG)}.
+     *
+     * <pre>
+     * &#64;Confiqure.Setting(end = "/repricer-settings", tools = {RepricerTools.class})
+     * public class RepricerSettings { ... }
+     * </pre>
+     *
+     * @since 1.8
+     */
+    @Target(ElementType.TYPE)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Setting {
+        /** Data-API address of the object. Defaults to snake_case of the class name when blank. */
+        String end() default "";
+
+        /** The {@link Tool} classes whose methods serve this object; they load with it in the chat. */
+        Class<?>[] tools() default {};
+    }
+
+    /**
+     * An object shared by the whole organization with MANY records per organization (suppliers,
+     * warehouses, per-listing settings). Mark the field that identifies one record with
+     * {@link Identity}; the engine refuses a second record with the same identity. Equivalent to
+     * the old {@code @Confiqure(type = MULTI, dataScope = ORG)}.
+     *
+     * <pre>
+     * &#64;Confiqure.List(end = "/listing-repricing", tools = {ListingsTool.class})
+     * public class ListingRepricing {
+     *     &#64;Confiqure.Identity
+     *     private String listingSku;     // from a ListingsTool search result, never typed
+     *     private Money minPrice;
+     * }
+     * </pre>
+     *
+     * @since 1.8
+     */
+    @Target(ElementType.TYPE)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface List {
+        /** Data-API address of the object. Defaults to snake_case of the class name when blank. */
+        String end() default "";
+
+        /** The {@link Tool} classes whose methods serve this object; they load with it in the chat. */
+        Class<?>[] tools() default {};
+    }
+
+    /**
+     * The per-user variants of {@link Setting} and {@link List}: each end user gets private
+     * records even inside an organization (personal credentials, individual preferences).
+     * Equivalent to the old {@code dataScope = USER}.
+     *
+     * @since 1.8
+     */
+    interface User {
+        /** One private record per end user. See {@link Confiqure.Setting}. */
+        @Target(ElementType.TYPE)
+        @Retention(RetentionPolicy.RUNTIME)
+        @interface Setting {
+            /** Data-API address of the object. Defaults to snake_case of the class name when blank. */
+            String end() default "";
+
+            /** The {@link Tool} classes whose methods serve this object; they load with it in the chat. */
+            Class<?>[] tools() default {};
+        }
+
+        /** Many private records per end user. See {@link Confiqure.List}. */
+        @Target(ElementType.TYPE)
+        @Retention(RetentionPolicy.RUNTIME)
+        @interface List {
+            /** Data-API address of the object. Defaults to snake_case of the class name when blank. */
+            String end() default "";
+
+            /** The {@link Tool} classes whose methods serve this object; they load with it in the chat. */
+            Class<?>[] tools() default {};
+        }
+    }
+
+    /**
+     * On ONE field of a {@link List} (or {@link User.List}) object: the value that identifies a
+     * record. Two records of the same owner can never share it — the engine refuses the second
+     * save. It is usually an id the host owns (a SKU, an order number) that arrives from a tool
+     * result the user picked, never a value the chat typed.
+     *
+     * @since 1.8
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Identity {}
+
+    /**
+     * Marks a tool the chat agent can invoke during a session — on a METHOD (one tool, as before)
+     * or, since 1.8, on a CLASS: a <b>tool class</b>.
+     *
+     * <p><b>A tool class is a contract.</b> Its Javadoc is the business flow the chat follows —
+     * when to search, with which method, how to show the results, what a change needs — and
+     * every public method is one operation with typed parameters and a typed return value. The
+     * chat model reads the class source and follows it; the confiqure engine converts and checks
+     * every argument against the declared parameter types, calls the method, and checks the reply
+     * against the declared return type. Nothing else is inferred.
+     *
+     * <pre>
+     * /** FLOW: the seller's listings — find one, then change it.
+     *  *  FIND: ask what they know (a title, an ASIN, or a code) and search with the matching
+     *  *  method. One hit: confirm it. Several: show them as options and let the seller pick.
+     *  *  None: say what was searched and ask for another clue.
+     *  *  CHANGE: every change takes the sku of a found listing, never a typed one.
+     *  *  Call, then say what changed. After a pick, "it" means that listing. *&#47;
+     * &#64;Confiqure.Tool(name = "ListingsTool")
+     * &#64;RestController
+     * public class ListingsTool {
+     *     &#64;PostMapping("/by-title")  public List&lt;Listing&gt; byTitle(&#64;RequestBody TitleQuery q) { ... }
+     *     &#64;PostMapping("/by-asin")   public List&lt;Listing&gt; byAsin(&#64;RequestBody AsinQuery q) { ... }
+     *     &#64;PostMapping("/quantity")  public Ack setQuantity(&#64;RequestBody QuantityChange c) { ... }
+     *     &#64;Confiqure.Tool(serverSide = false)
+     *     public Ack openProduct360(&#64;RequestBody SkuRef ref) { return null; }   // runs in the page
+     * }
+     * </pre>
+     * Inside a tool class, a method-level {@code @Confiqure.Tool} is optional and only sets that
+     * method's {@link #name()}, {@link #serverSide()} or {@link #async()}. The tool class is
+     * attached to the objects it serves through their {@code tools()} attribute.
+     */
+    @Target({ElementType.METHOD, ElementType.TYPE})
     @Retention(RetentionPolicy.RUNTIME)
     @interface Tool {
-        /** Tool name. Defaults to the method name when blank. */
+        /** Tool name. Defaults to the method name (or, on a tool class, the class name) when blank. */
         String name() default "";
 
         /**

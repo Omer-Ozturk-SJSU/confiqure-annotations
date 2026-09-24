@@ -19,8 +19,22 @@ import javax.lang.model.element.TypeElement;
 import javax.tools.Diagnostic;
 import java.util.Set;
 
-@SupportedAnnotationTypes("ai.confiqure.Confiqure")
+@SupportedAnnotationTypes({
+    "ai.confiqure.Confiqure",
+    "ai.confiqure.Confiqure.Setting",
+    "ai.confiqure.Confiqure.List",
+    "ai.confiqure.Confiqure.User.Setting",
+    "ai.confiqure.Confiqure.User.List"})
 public class ConfiqureProcessor extends AbstractProcessor {
+
+    /** Every annotation that marks a class as a saveable object: each gets a {@code confiqureKey}. */
+    private static final java.util.List<Class<? extends java.lang.annotation.Annotation>> OBJECT_ANNOTATIONS =
+        java.util.List.of(
+            Confiqure.class,
+            Confiqure.Setting.class,
+            Confiqure.List.class,
+            Confiqure.User.Setting.class,
+            Confiqure.User.List.class);
 
     @Override
     public SourceVersion getSupportedSourceVersion() {
@@ -55,14 +69,16 @@ public class ConfiqureProcessor extends AbstractProcessor {
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
         if (!initialized) return false;
-        for (Element element : roundEnv.getElementsAnnotatedWith(Confiqure.class)) {
-            if (element.getKind() != ElementKind.CLASS) continue;
-            try {
-                injectConfiqureKey(element);
-            } catch (Exception e) {
-                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
-                    "[confiqure] failed to inject confiqureKey into " + element.getSimpleName() + ": " + e.getMessage(),
-                    element);
+        for (Class<? extends java.lang.annotation.Annotation> objectAnnotation : OBJECT_ANNOTATIONS) {
+            for (Element element : roundEnv.getElementsAnnotatedWith(objectAnnotation)) {
+                if (element.getKind() != ElementKind.CLASS) continue;
+                try {
+                    injectConfiqureKey(element);
+                } catch (Exception e) {
+                    processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                        "[confiqure] failed to inject confiqureKey into " + element.getSimpleName() + ": " + e.getMessage(),
+                        element);
+                }
             }
         }
         return false;
