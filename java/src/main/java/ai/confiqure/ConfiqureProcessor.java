@@ -20,7 +20,6 @@ import javax.tools.Diagnostic;
 import java.util.Set;
 
 @SupportedAnnotationTypes({
-    "ai.confiqure.Confiqure",
     "ai.confiqure.Confiqure.Setting",
     "ai.confiqure.Confiqure.List",
     "ai.confiqure.Confiqure.User.Setting",
@@ -30,7 +29,6 @@ public class ConfiqureProcessor extends AbstractProcessor {
     /** Every annotation that marks a class as a saveable object: each gets a {@code confiqureKey}. */
     private static final java.util.List<Class<? extends java.lang.annotation.Annotation>> OBJECT_ANNOTATIONS =
         java.util.List.of(
-            Confiqure.class,
             Confiqure.Setting.class,
             Confiqure.List.class,
             Confiqure.User.Setting.class,

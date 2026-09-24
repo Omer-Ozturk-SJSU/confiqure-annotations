@@ -7,24 +7,12 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Marks a class as a confiqure.ai configuration target. The confiqure CLI
- * scans source files for this annotation and uploads them; the confiqure
- * backend AI parses the annotated class and generates the chat playbook.
+ * The confiqure.ai annotation vocabulary. {@code Confiqure} itself is a namespace and cannot be
+ * applied to anything; use its nested annotations. The confiqure CLI scans source files for them
+ * and pushes the annotated classes; the chat model reads the class source and follows it.
  *
- * <pre>
- * &#64;Confiqure(
- *     end       = "/notifications",
- *     type      = Confiqure.Type.SINGLE,
- *     scope     = Confiqure.Scope.LIMITED,
- *     dataScope = Confiqure.DataScope.ORG,
- *     tools     = {"SEND_TEST_NOTIFICATION"}
- * )
- * public class Notifications { ... }
- * </pre>
- *
- * <p><b>Since 2.0 — the object vocabulary.</b> A configuration class is an <i>object</i>:
- * something the end user would call "my X". Declare what it is with ONE of four
- * annotations instead of {@code type}/{@code dataScope}/{@code scope}:
+ * <p><b>Objects.</b> A configuration class is an <i>object</i>: something the end user would call
+ * "my X". Declare what it is with ONE of four annotations:
  * <pre>
  *                        one record per owner        many records per owner
  *   shared by the org    &#64;Confiqure.Setting          &#64;Confiqure.List
@@ -34,123 +22,31 @@ import java.lang.annotation.Target;
  * <i>part</i>: it needs no annotation and has no records of its own. A field whose type is
  * another object class is a <i>reference</i> to that object's record(s), never a copy of it.
  * A {@link List} object names the field that identifies a record with {@link Identity}.
- * Tools are grouped in <i>tool classes</i> ({@link Tool} on a class) whose Javadoc is the
- * business flow the chat follows; an object lists its tool classes in {@code tools()}.
- * The plain {@code @Confiqure(end, type, dataScope, scope, tools)} form still compiles and is
- * mapped onto this vocabulary (SINGLE → Setting, MULTI → List, USER → User.*); {@code scope}
- * is ignored — the chat is no longer fenced to one endpoint.
+ * The chat is never fenced to one object: it opens on the screen's context and reaches any
+ * object or tool class the conversation needs.
  *
- * <p>Tools are declared only as <b>tool classes</b> ({@link Tool} on a class): the class
- * Javadoc is the business flow, each public method one typed operation. An operation runs on
- * your server unless marked {@link Browser} (runs in the page) or {@link Async} (result
- * delivered later). Since 2.0 there are no method-level tools.
+ * <p><b>Tools.</b> Tools are declared only as <b>tool classes</b> ({@link Tool} on a class): the
+ * class Javadoc is the business flow, each public method one typed operation. An operation runs
+ * on your server unless marked {@link Browser} (runs in the page) or {@link Async} (result
+ * delivered later).
+ *
+ * <p><b>Facts.</b> {@link Facts} marks the read-only user-facts contract your application serves
+ * back to confiqure.
+ *
+ * <p>The pre-3.0 forms — {@code @Confiqure(end, type, scope, dataScope, tools)} on a class and
+ * {@code @Confiqure.Tool} on a method — no longer compile.
  */
-@Target(ElementType.TYPE)
+@Target({})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Confiqure {
-    /** Chat endpoint segment. Defaults to snake_case of the class name when blank. */
-    String end() default "";
-
-    /**
-     * What this class is: SINGLE (one configuration record per user), MULTI (a table of records),
-     * or {@link Type#FACTS} — not a configuration at all, but the read-only user-facts contract
-     * your application serves back to confiqure (see {@link #callback()}).
-     */
-    Type type() default Type.SINGLE;
-
-    /**
-     * ONLY meaningful with {@code type = }{@link Type#FACTS}: the relative path of the {@code GET}
-     * endpoint in YOUR application that returns the current facts for one end user. confiqure calls
-     * {@code hostBaseUrl + callback} with the user's handle and binds the JSON response into this
-     * class.
-     *
-     * <pre>
-     * &#64;Confiqure(type = Confiqure.Type.FACTS, callback = "/api/confiqure/user-facts")
-     * public class SellerFacts {
-     *     // The product categories this seller actually sells in.
-     *     private List&lt;String&gt; sellingCategories;
-     *     // How many of their listings are currently stranded.
-     *     private Integer strandedCount;
-     * }
-     * </pre>
-     *
-     * <p>Comment every field — the comment is what tells the model what the fact MEANS.
-     * Ignored on SINGLE/MULTI classes (lifecycle callbacks stay workspace-level via
-     * {@link DefaultCallbackHook}).
-     */
-    String callback() default "";
-
-    /**
-     * Chat context scope: LIMITED (this endpoint only) or UNLIMITED (can navigate all endpoints).
-     *
-     * @deprecated since 2.0 — ignored. The chat is never fenced to one endpoint any more: it opens
-     * on the screen's context and reaches any object or tool class the conversation needs.
-     */
-    @Deprecated
-    Scope scope() default Scope.LIMITED;
-
-    /**
-     * Names of the tools this endpoint can invoke during chat.
-     *
-     * @deprecated since 2.0 — tools are tool classes; name them with {@code tools()} on
-     * {@link Setting}, {@link List}, {@link User.Setting} or {@link User.List}. Ignored.
-     */
-    @Deprecated
-    String[] tools() default {};
-
-    /**
-     * Who a saved configuration belongs to. {@code ORG} (default) — the record is shared across
-     * everyone in the end user's organization: when the host mints an embed token carrying an
-     * {@code organizationId}, all members of that org see and edit ONE shared instance (suppliers,
-     * business model, repricer settings — anything org-wide). {@code USER} opts a genuinely personal
-     * endpoint out, so each end user gets their own private record even within an org (personal
-     * credentials, individual preferences).
-     *
-     * <p>Org sharing activates only when the host's token mint sends {@code organizationId}; an
-     * org-less host, or a token without one, behaves exactly as a per-user endpoint. Declared, never
-     * inferred — like {@link #type()}/{@link #scope()}, this is read straight from the annotation.
-     */
-    DataScope dataScope() default DataScope.ORG;
-
-    enum Type {
-        /** One configuration record per end user. */
-        SINGLE,
-        /** A table of configuration records per end user. */
-        MULTI,
-        /**
-         * Not a configuration — the <b>user-facts contract</b>. The class declares what your
-         * application already knows about an end user (their categories, their counts, their open
-         * issues); its FIELD COMMENTS tell the model what each fact means. confiqure {@code GET}s
-         * {@link #callback()} for the acting user, binds the JSON into this class, and puts the
-         * compact core in front of the model so the chat stops asking for things you already know.
-         *
-         * <p>Read-only and host-owned: the conversation never writes a FACTS class, it is not a chat
-         * endpoint, and it holds no saved instances. Fetches are cached for 24 hours and refreshed in
-         * the background — a slow or down endpoint never delays a chat, it just serves the last
-         * known facts.
-         */
-        FACTS
-    }
-
-    enum Scope {
-        LIMITED,
-        UNLIMITED
-    }
-
-    /** Ownership of a saved configuration: shared across an organization, or private to each end user. */
-    enum DataScope {
-        ORG,
-        USER
-    }
 
     /**
      * An object shared by the whole organization with exactly ONE record per organization
      * (account settings, the repricer's account-wide rules, the business model). The chat reads
-     * and edits that one record; it never creates a second one. Equivalent to the old
-     * {@code @Confiqure(type = SINGLE, dataScope = ORG)}.
+     * and edits that one record; it never creates a second one.
      *
      * <pre>
-     * &#64;Confiqure.Setting(end = "/repricer-settings", tools = {RepricerTools.class})
+     * &#64;Confiqure.Setting(end = "/repricer-settings")
      * public class RepricerSettings { ... }
      * </pre>
      *
@@ -162,18 +58,15 @@ public @interface Confiqure {
         /** Data-API address of the object. Defaults to snake_case of the class name when blank. */
         String end() default "";
 
-        /** The {@link Tool} classes whose methods serve this object; they load with it in the chat. */
-        Class<?>[] tools() default {};
     }
 
     /**
      * An object shared by the whole organization with MANY records per organization (suppliers,
      * warehouses, per-listing settings). Mark the field that identifies one record with
-     * {@link Identity}; the engine refuses a second record with the same identity. Equivalent to
-     * the old {@code @Confiqure(type = MULTI, dataScope = ORG)}.
+     * {@link Identity}; the engine refuses a second record with the same identity.
      *
      * <pre>
-     * &#64;Confiqure.List(end = "/listing-repricing", tools = {ListingsTool.class})
+     * &#64;Confiqure.List(end = "/listing-repricing")
      * public class ListingRepricing {
      *     &#64;Confiqure.Identity
      *     private String listingSku;     // from a ListingsTool search result, never typed
@@ -189,14 +82,11 @@ public @interface Confiqure {
         /** Data-API address of the object. Defaults to snake_case of the class name when blank. */
         String end() default "";
 
-        /** The {@link Tool} classes whose methods serve this object; they load with it in the chat. */
-        Class<?>[] tools() default {};
     }
 
     /**
      * The per-user variants of {@link Setting} and {@link List}: each end user gets private
      * records even inside an organization (personal credentials, individual preferences).
-     * Equivalent to the old {@code dataScope = USER}.
      *
      * @since 2.0
      */
@@ -208,8 +98,6 @@ public @interface Confiqure {
             /** Data-API address of the object. Defaults to snake_case of the class name when blank. */
             String end() default "";
 
-            /** The {@link Tool} classes whose methods serve this object; they load with it in the chat. */
-            Class<?>[] tools() default {};
         }
 
         /** Many private records per end user. See {@link Confiqure.List}. */
@@ -219,9 +107,38 @@ public @interface Confiqure {
             /** Data-API address of the object. Defaults to snake_case of the class name when blank. */
             String end() default "";
 
-            /** The {@link Tool} classes whose methods serve this object; they load with it in the chat. */
-            Class<?>[] tools() default {};
         }
+    }
+
+    /**
+     * The <b>user-facts contract</b>: not a configuration, but what your application already knows
+     * about an end user (their categories, their counts, their open issues). Its FIELD COMMENTS
+     * tell the model what each fact means. confiqure {@code GET}s {@code hostBaseUrl + callback}
+     * for the acting user, binds the JSON into this class, and puts the compact core in front of
+     * the model so the chat stops asking for things you already know.
+     *
+     * <pre>
+     * &#64;Confiqure.Facts(callback = "/api/confiqure/user-facts")
+     * public class SellerFacts {
+     *     // The product categories this seller actually sells in.
+     *     private List&lt;String&gt; sellingCategories;
+     *     // How many of their listings are currently stranded.
+     *     private Integer strandedCount;
+     * }
+     * </pre>
+     *
+     * <p>Read-only and host-owned: the conversation never writes a facts class, it is not an
+     * object, and it holds no records. Fetches are cached for 24 hours and refreshed in the
+     * background — a slow or down endpoint never delays a chat, it just serves the last known
+     * facts. Comment every field.
+     *
+     * @since 3.0
+     */
+    @Target(ElementType.TYPE)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Facts {
+        /** Relative path of the {@code GET} endpoint in YOUR application that returns the current facts for one end user. */
+        String callback();
     }
 
     /**
@@ -269,8 +186,9 @@ public @interface Confiqure {
      *     public Ack openProduct360(&#64;RequestBody SkuRef ref) { return null; }   // runs in the page
      * }
      * </pre>
-     * An object lists the tool classes that serve it in its {@code tools()} attribute
-     * ({@link Setting}, {@link List}, {@link User.Setting}, {@link User.List}).
+     * Tool classes are not attached to objects: the chat's navigator brings a tool class into the
+     * conversation as its own <i>tool frame</i> when an ask needs it, exactly as it brings an
+     * object in as a <i>setting frame</i>.
      */
     @Target(ElementType.TYPE)
     @Retention(RetentionPolicy.RUNTIME)
@@ -419,8 +337,8 @@ public @interface Confiqure {
      * per gated tool. Predicate grammar and semantics are identical to {@link Gate}.
      *
      * <pre>
-     * &#64;Confiqure(end = "/suppliers", tools = {"SUPPLIER_SITE_ANALYSER"})
-     * &#64;Confiqure.ToolGate(tool     = "SUPPLIER_SITE_ANALYSER",
+     * &#64;Confiqure.List(end = "/suppliers")
+     * &#64;Confiqure.ToolGate(tool     = "analyseSite",
      *                     requires = "siteUrl != null &amp;&amp; credentialsVerified == true",
      *                     message  = "I need a verified site URL before I can run the analysis.")
      * public class SupplierConfig { ... }
@@ -515,8 +433,8 @@ public @interface Confiqure {
     }
 
     /**
-     * Opts a {@code type = MULTI} configuration class OUT of chat deletion. By default a MULTI
-     * endpoint's saved instances can be deleted from chat — the user asks, the engine shows a
+     * Opts a {@link List} (or {@link User.List}) object OUT of chat deletion. By default a List
+     * object's records can be deleted from chat — the user asks, the engine shows a
      * direct-bind confirmation card, and only the user's click disposes (soft-delete; the data is
      * staff-recoverable, and your application is notified via the {@code config.deleted} /
      * {@code config.bulk_deleted} lifecycle webhooks). Add {@code @Confiqure.Protect} to a class
@@ -524,13 +442,13 @@ public @interface Confiqure {
      * removal should only ever happen through your own application:
      *
      * <pre>
-     * &#64;Confiqure(end = "/audit-entries", type = Confiqure.Type.MULTI)
+     * &#64;Confiqure.List(end = "/audit-entries")
      * &#64;Confiqure.Protect
      * public class AuditEntry { ... }
      * </pre>
      *
-     * <p>SINGLE endpoints are never chat-deletable regardless (a SINGLE record is reset by
-     * reconfiguring it, not deleted), so {@code @Protect} is meaningful only on MULTI classes.
+     * <p>{@link Setting} objects are never chat-deletable regardless (their one record is reset by
+     * reconfiguring it, not deleted), so {@code @Protect} is meaningful only on List objects.
      * The opt-out is capability-level and composes with {@link ToolGate} on {@code nf_delete} (the
      * conditional layer — "deletable, but not while an analysis is running"). Adding or removing
      * {@code @Protect} takes effect on the class's next push; existing saved instances are
