@@ -22,7 +22,7 @@ import java.lang.annotation.Target;
  * public class Notifications { ... }
  * </pre>
  *
- * <p><b>Since 1.8 — the object vocabulary.</b> A configuration class is an <i>object</i>:
+ * <p><b>Since 2.0 — the object vocabulary.</b> A configuration class is an <i>object</i>:
  * something the end user would call "my X". Declare what it is with ONE of four
  * annotations instead of {@code type}/{@code dataScope}/{@code scope}:
  * <pre>
@@ -40,23 +40,10 @@ import java.lang.annotation.Target;
  * mapped onto this vocabulary (SINGLE → Setting, MULTI → List, USER → User.*); {@code scope}
  * is ignored — the chat is no longer fenced to one endpoint.
  *
- * <p>Tools come in two kinds, both declared once as a {@link Tool}-annotated
- * method and referenced by name in {@link #tools()}:
- * <ul>
- *   <li><b>Server-side</b> ({@code serverSide=true}, the default) — a real
- *       controller method confiqure invokes over HTTP. Returns data or performs
- *       a backend action; no UI.</li>
- *   <li><b>Frontend</b> ({@code serverSide=false}) — a contract-stub method
- *       (body never runs on the backend) whose handler runs in the host's
- *       browser via the embed SDK. Use for anything needing a UI (OAuth, a
- *       picker, rendering a view). The method signature still carries the I/O
- *       contract: its {@code @RequestBody} DTO is the input, its return type the
- *       output. Example:
- *       <pre>
- *       &#64;Confiqure.Tool(name = "show_report", serverSide = false)
- *       public String showReport(&#64;RequestBody StockFilterData filter) { return null; }
- *       </pre></li>
- * </ul>
+ * <p>Tools are declared only as <b>tool classes</b> ({@link Tool} on a class): the class
+ * Javadoc is the business flow, each public method one typed operation. An operation runs on
+ * your server unless marked {@link Browser} (runs in the page) or {@link Async} (result
+ * delivered later). Since 2.0 there are no method-level tools.
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
@@ -96,13 +83,19 @@ public @interface Confiqure {
     /**
      * Chat context scope: LIMITED (this endpoint only) or UNLIMITED (can navigate all endpoints).
      *
-     * @deprecated since 1.8 — ignored. The chat is never fenced to one endpoint any more: it opens
+     * @deprecated since 2.0 — ignored. The chat is never fenced to one endpoint any more: it opens
      * on the screen's context and reaches any object or tool class the conversation needs.
      */
     @Deprecated
     Scope scope() default Scope.LIMITED;
 
-    /** Names of @Confiqure.Tool methods this endpoint can invoke during chat. */
+    /**
+     * Names of the tools this endpoint can invoke during chat.
+     *
+     * @deprecated since 2.0 — tools are tool classes; name them with {@code tools()} on
+     * {@link Setting}, {@link List}, {@link User.Setting} or {@link User.List}. Ignored.
+     */
+    @Deprecated
     String[] tools() default {};
 
     /**
@@ -161,7 +154,7 @@ public @interface Confiqure {
      * public class RepricerSettings { ... }
      * </pre>
      *
-     * @since 1.8
+     * @since 2.0
      */
     @Target(ElementType.TYPE)
     @Retention(RetentionPolicy.RUNTIME)
@@ -188,7 +181,7 @@ public @interface Confiqure {
      * }
      * </pre>
      *
-     * @since 1.8
+     * @since 2.0
      */
     @Target(ElementType.TYPE)
     @Retention(RetentionPolicy.RUNTIME)
@@ -205,7 +198,7 @@ public @interface Confiqure {
      * records even inside an organization (personal credentials, individual preferences).
      * Equivalent to the old {@code dataScope = USER}.
      *
-     * @since 1.8
+     * @since 2.0
      */
     interface User {
         /** One private record per end user. See {@link Confiqure.Setting}. */
@@ -237,22 +230,27 @@ public @interface Confiqure {
      * save. It is usually an id the host owns (a SKU, an order number) that arrives from a tool
      * result the user picked, never a value the chat typed.
      *
-     * @since 1.8
+     * @since 2.0
      */
     @Target(ElementType.FIELD)
     @Retention(RetentionPolicy.RUNTIME)
     @interface Identity {}
 
     /**
-     * Marks a tool the chat agent can invoke during a session — on a METHOD (one tool, as before)
-     * or, since 1.8, on a CLASS: a <b>tool class</b>.
+     * A <b>tool class</b>: a group of related operations the chat can call, declared ONCE as a
+     * class. Since 2.0 this is the only place a tool can be declared — there are no method-level
+     * tools any more; the navigator hands the chat a whole tool class, never a single method.
      *
      * <p><b>A tool class is a contract.</b> Its Javadoc is the business flow the chat follows —
-     * when to search, with which method, how to show the results, what a change needs — and
-     * every public method is one operation with typed parameters and a typed return value. The
-     * chat model reads the class source and follows it; the confiqure engine converts and checks
-     * every argument against the declared parameter types, calls the method, and checks the reply
-     * against the declared return type. Nothing else is inferred.
+     * when to search, with which method, how to show the results, what a change needs, what to
+     * say after — and every public method is one operation with typed parameters and a typed
+     * return value. The chat model reads the class source and follows it; the confiqure engine
+     * converts and checks every argument against the declared parameter types, calls the method,
+     * and checks the reply against the declared return type. Nothing else is inferred.
+     *
+     * <p>Operations run on your server by default (a real controller method confiqure invokes
+     * over HTTP). Mark an operation that must run in the host's browser with {@link Browser},
+     * and one whose result arrives later with {@link Async}.
      *
      * <pre>
      * /** FLOW: the seller's listings — find one, then change it.
@@ -267,62 +265,56 @@ public @interface Confiqure {
      *     &#64;PostMapping("/by-title")  public List&lt;Listing&gt; byTitle(&#64;RequestBody TitleQuery q) { ... }
      *     &#64;PostMapping("/by-asin")   public List&lt;Listing&gt; byAsin(&#64;RequestBody AsinQuery q) { ... }
      *     &#64;PostMapping("/quantity")  public Ack setQuantity(&#64;RequestBody QuantityChange c) { ... }
-     *     &#64;Confiqure.Tool(serverSide = false)
+     *     &#64;Confiqure.Browser
      *     public Ack openProduct360(&#64;RequestBody SkuRef ref) { return null; }   // runs in the page
      * }
      * </pre>
-     * Inside a tool class, a method-level {@code @Confiqure.Tool} is optional and only sets that
-     * method's {@link #name()}, {@link #serverSide()} or {@link #async()}. The tool class is
-     * attached to the objects it serves through their {@code tools()} attribute.
+     * An object lists the tool classes that serve it in its {@code tools()} attribute
+     * ({@link Setting}, {@link List}, {@link User.Setting}, {@link User.List}).
      */
-    @Target({ElementType.METHOD, ElementType.TYPE})
+    @Target(ElementType.TYPE)
     @Retention(RetentionPolicy.RUNTIME)
     @interface Tool {
-        /** Tool name. Defaults to the method name (or, on a tool class, the class name) when blank. */
+        /** Tool class name. Defaults to the class name when blank. */
         String name() default "";
-
-        /**
-         * {@code true} (default): a server-side tool — confiqure dispatches an
-         * HTTP call to this controller method (returns data / performs a backend
-         * action, no UI).
-         * <p>{@code false}: a frontend tool — this method is a contract stub
-         * whose handler runs in the host's browser via the embed SDK. The method
-         * signature still defines the I/O contract (its {@code @RequestBody} DTO
-         * is the input, its return type the output), but the body never runs on
-         * the backend. Use for anything needing a UI (OAuth, pickers, rendering).
-         */
-        boolean serverSide() default true;
-
-        /**
-         * Server-side reply discipline (ignored when {@code serverSide=false}).
-         * <p>{@code false} (default) — <b>synchronous</b>: confiqure waits on the HTTP call and
-         * takes the method's return value as the tool result. Your handler is plain Spring — the
-         * request body IS your DTO (no envelope), and {@code confiqureKey} is injected into it:
-         * <pre>
-         * &#64;Confiqure.Tool(name = "lookup_supplier")
-         * &#64;PostMapping("/supplier")
-         * public SupplierDto lookup(&#64;RequestBody SupplierQuery q) { return service.lookup(q); }
-         * </pre>
-         * <p>{@code true} — <b>asynchronous</b>: confiqure ACKs immediately and you deliver the
-         * result later. The {@code ai.confiqure:confiqure-spring} SDK injects a {@code
-         * ConfiqureCallback} that does the header-reading + signed POST for you (the same {@code
-         * confiqureKey} rides your {@code @RequestBody} DTO as in the sync case):
-         * <pre>
-         * &#64;Confiqure.Tool(name = "analyze_supplier", async = true)
-         * &#64;PostMapping("/analyze")
-         * public ResponseEntity&lt;Void&gt; analyze(&#64;RequestBody SupplierQuery q, ConfiqureCallback reply) {
-         *     CompletableFuture.supplyAsync(() -&gt; service.slowAnalysis(q))
-         *         .whenComplete((r, ex) -&gt; { if (ex != null) reply.fail(ex.getMessage()); else reply.reply(r); });
-         *     return ResponseEntity.accepted().build();   // ACK now; the result follows
-         * }
-         * </pre>
-         * Without the SDK, read the {@code X-Confiqure-Tool-Call-Id} + {@code X-Confiqure-Reply-Url}
-         * headers and POST {@code {"result":…}} back yourself. Use async only when the work outlives
-         * one request (long jobs, human-in-the-loop, webhooks); ~90% of tools are synchronous, and
-         * even a slow sync handler has a 5-minute window before async is warranted.
-         */
-        boolean async() default false;
     }
+
+    /**
+     * An operation of a {@link Tool} class that runs in the host's <b>browser</b>, not on the
+     * server: the method is a contract stub (its body never runs on the backend) whose handler
+     * runs in the page via the embed SDK. Use it for anything that needs a UI — opening a view,
+     * a picker, OAuth. The signature still carries the I/O contract: the {@code @RequestBody}
+     * DTO is the input, the return type the output.
+     *
+     * @since 2.0
+     */
+    @Target(ElementType.METHOD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Browser {}
+
+    /**
+     * An operation of a {@link Tool} class whose result arrives <b>later</b>: confiqure ACKs the
+     * call immediately and you deliver the result afterwards. The {@code ai.confiqure:confiqure-spring}
+     * SDK injects a {@code ConfiqureCallback} that does the header-reading + signed POST for you:
+     * <pre>
+     * &#64;Confiqure.Async
+     * &#64;PostMapping("/analyze")
+     * public ResponseEntity&lt;Void&gt; analyze(&#64;RequestBody SupplierQuery q, ConfiqureCallback reply) {
+     *     CompletableFuture.supplyAsync(() -&gt; service.slowAnalysis(q))
+     *         .whenComplete((r, ex) -&gt; { if (ex != null) reply.fail(ex.getMessage()); else reply.reply(r); });
+     *     return ResponseEntity.accepted().build();   // ACK now; the result follows
+     * }
+     * </pre>
+     * Without the SDK, read the {@code X-Confiqure-Tool-Call-Id} + {@code X-Confiqure-Reply-Url}
+     * headers and POST {@code {"result":…}} back yourself. Use it only when the work outlives one
+     * request (long jobs, human-in-the-loop, webhooks); even a slow synchronous handler has a
+     * 5-minute window.
+     *
+     * @since 2.0
+     */
+    @Target(ElementType.METHOD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Async {}
 
     /** Marks a controller method as the workspace's default callback hook.
      *  Receives lifecycle events (onStart, onComplete, onTimeout) with confiqureKeys. */
@@ -438,7 +430,7 @@ public @interface Confiqure {
     @Retention(RetentionPolicy.RUNTIME)
     @Repeatable(ToolGates.class)
     @interface ToolGate {
-        /** The tool name (as referenced in {@link Confiqure#tools()}) this gate governs. */
+        /** The operation name (a method of a {@link Tool} class) this gate governs. */
         String tool();
 
         /** Predicate (see {@link Gate}) that must hold over the bound instance before the tool may be dispatched. */
