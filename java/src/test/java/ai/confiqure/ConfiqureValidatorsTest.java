@@ -96,4 +96,49 @@ class ConfiqureValidatorsTest {
     private static List<String> messages(List<Diagnostic<? extends JavaFileObject>> errors) {
         return errors.stream().map(d -> d.getMessage(null)).collect(Collectors.toList());
     }
+
+    /**
+     * A host that compiles WITHOUT the javac exports (a separate javac, so none of this JVM's opens apply): the processor
+     * warns and the compile carries on — a good class compiles, and a bad VerifiedBy name still fails with its message —
+     * instead of javac aborting with an uncaught processor exception.
+     */
+    @Test
+    void withoutTheJavacExportsTheProcessorWarnsAndTheCompileCarriesOn() throws Exception {
+        java.io.File dir = Files.createTempDirectory("confiqure-no-exports").toFile();
+        java.io.File pkg = new java.io.File(dir, "demo");
+        assertTrue(pkg.mkdirs());
+        java.io.File good = new java.io.File(pkg, "DemoSettings.java");
+        Files.write(good.toPath(), SETTING.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        Result ok = javac(dir, good);
+        assertEquals(0, ok.exit, ok.output);
+        assertTrue(ok.output.contains("[confiqure] processor could not initialize"), ok.output);
+        assertTrue(!ok.output.contains("uncaught exception"), ok.output);
+
+        Files.write(good.toPath(), SETTING.replace("\"DemoTool.verifyCode\"", "\"verifyCode\"").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        Result bad = javac(dir, good);
+        assertTrue(bad.exit != 0, bad.output);
+        assertTrue(bad.output.contains("must name a tool operation as \"ToolClass.method\""), bad.output);
+        assertTrue(!bad.output.contains("uncaught exception"), bad.output);
+    }
+
+    private static final class Result {
+        final int exit;
+        final String output;
+
+        Result(int exit, String output) {
+            this.exit = exit;
+            this.output = output;
+        }
+    }
+
+    private static Result javac(java.io.File dir, java.io.File source) throws Exception {
+        String javac = System.getProperty("java.home") + java.io.File.separator + "bin" + java.io.File.separator + "javac";
+        String cp = System.getProperty("java.class.path");
+        ProcessBuilder pb = new ProcessBuilder(javac, "-cp", cp, "-processorpath", cp,
+                "-processor", ConfiqureProcessor.class.getName(), "-d", new java.io.File(dir, "out").getPath(), source.getPath());
+        pb.redirectErrorStream(true);
+        Process p = pb.start();
+        String out = new String(p.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        return new Result(p.waitFor(), out);
+    }
 }

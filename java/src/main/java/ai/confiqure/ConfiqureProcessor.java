@@ -56,7 +56,9 @@ public class ConfiqureProcessor extends AbstractProcessor {
             this.treeMaker = TreeMaker.instance(context);
             this.names = Names.instance(context);
             this.initialized = true;
-        } catch (Exception e) {
+        } catch (Exception | LinkageError e) {
+            // Without the javac exports the internal API calls throw IllegalAccessError, an Error: caught here too, so the
+            // host's compile carries on with this warning (and the VerifiedBy check) instead of aborting.
             processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING,
                 "[confiqure] processor could not initialize. Add the following to your maven-compiler-plugin compilerArgs:\n" +
                 "  -J--add-opens=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED\n" +
