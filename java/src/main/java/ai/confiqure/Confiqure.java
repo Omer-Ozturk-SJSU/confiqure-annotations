@@ -601,8 +601,8 @@ public @interface Confiqure {
     }
 
     /**
-     * On an operation of a {@link Tool} class that deletes, stops or cancels something: the call
-     * runs only with {@code confirmed=true}.
+     * On an operation of a {@link Tool} class that deletes, stops, pauses or cancels something, or
+     * changes something live (a live price): the call runs only with {@code confirmed=true}.
      *
      * <p>The engine shows the user a confirmation card first ({@link #text()} as its words, or its
      * own), and sets {@code confirmed=true} only from the user's click on that card; without the

@@ -20,5 +20,6 @@ A comment guides the model; a declaration on the field is what the engine enforc
 Ranges and sizes (`@Min`, `@Max`, `@Size`) are not enforced by Confiqure: write them in the field's comment, and the
 model follows them.
 
-`@Confiqure.Confirm` on a tool operation that deletes, stops or cancels something makes the call run only with
-`confirmed=true`. The engine sets it only from the user's click on the confirmation card it shows.
+`@Confiqure.Confirm` on a tool operation that deletes, stops, pauses or cancels something, or changes something
+live (a live price), makes the call run only with `confirmed=true`. The engine sets it only from the user's click
+on the confirmation card it shows.
