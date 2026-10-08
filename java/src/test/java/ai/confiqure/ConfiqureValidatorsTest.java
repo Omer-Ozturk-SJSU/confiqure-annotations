@@ -98,27 +98,46 @@ class ConfiqureValidatorsTest {
     }
 
     /**
-     * A host that compiles WITHOUT the javac exports (a separate javac, so none of this JVM's opens apply): the processor
-     * warns and the compile carries on — a good class compiles, and a bad VerifiedBy name still fails with its message —
-     * instead of javac aborting with an uncaught processor exception.
+     * A host that compiles WITHOUT the javac exports (a separate javac, so none of this JVM's opens apply): never javac's
+     * uncaught-exception abort. An object class fails with a readable error naming it and the flags (it would ship without
+     * its confiqureKey); a plain class compiles, and a bad VerifiedBy on it fails with its own message only.
      */
     @Test
-    void withoutTheJavacExportsTheProcessorWarnsAndTheCompileCarriesOn() throws Exception {
+    void withoutTheJavacExports_anObjectClassFailsReadably_andAPlainClassCompilesWithItsOwnChecks() throws Exception {
         java.io.File dir = Files.createTempDirectory("confiqure-no-exports").toFile();
         java.io.File pkg = new java.io.File(dir, "demo");
         assertTrue(pkg.mkdirs());
-        java.io.File good = new java.io.File(pkg, "DemoSettings.java");
-        Files.write(good.toPath(), SETTING.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        Result ok = javac(dir, good);
-        assertEquals(0, ok.exit, ok.output);
-        assertTrue(ok.output.contains("[confiqure] processor could not initialize"), ok.output);
-        assertTrue(!ok.output.contains("uncaught exception"), ok.output);
 
-        Files.write(good.toPath(), SETTING.replace("\"DemoTool.verifyCode\"", "\"verifyCode\"").getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        Result bad = javac(dir, good);
+        java.io.File setting = write(pkg, "DemoSettings.java", SETTING);
+        Result object = javac(dir, setting);
+        assertTrue(object.exit != 0, object.output);
+        assertTrue(object.output.contains("[confiqure] DemoSettings needs its confiqureKey, and the processor could not initialize"),
+                object.output);
+        assertTrue(object.output.contains("--add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED"), object.output);
+        assertTrue(!object.output.contains("uncaught exception"), object.output);
+
+        String plain = "package demo;\n"
+                + "import ai.confiqure.Confiqure;\n"
+                + "public class DemoRequest {\n"
+                + "    @Confiqure.VerifiedBy(\"DemoTool.verifyCode\") public String code;\n"
+                + "}\n";
+        java.io.File request = write(pkg, "DemoRequest.java", plain);
+        Result good = javac(dir, request);
+        assertEquals(0, good.exit, good.output);
+        assertTrue(!good.output.contains("needs its confiqureKey"), good.output);
+
+        write(pkg, "DemoRequest.java", plain.replace("\"DemoTool.verifyCode\"", "\"verifyCode\""));
+        Result bad = javac(dir, request);
         assertTrue(bad.exit != 0, bad.output);
         assertTrue(bad.output.contains("must name a tool operation as \"ToolClass.method\""), bad.output);
+        assertTrue(!bad.output.contains("needs its confiqureKey"), bad.output);
         assertTrue(!bad.output.contains("uncaught exception"), bad.output);
+    }
+
+    private static java.io.File write(java.io.File pkg, String name, String code) throws Exception {
+        java.io.File f = new java.io.File(pkg, name);
+        Files.write(f.toPath(), code.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return f;
     }
 
     private static final class Result {

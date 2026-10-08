@@ -61,11 +61,14 @@ public class ConfiqureProcessor extends AbstractProcessor {
             // host's compile carries on with this warning (and the VerifiedBy check) instead of aborting.
             processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING,
                 "[confiqure] processor could not initialize. Add the following to your maven-compiler-plugin compilerArgs:\n" +
-                "  -J--add-opens=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED\n" +
-                "  --add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED (and other com.sun.tools.javac.* packages)\n" +
-                "Error: " + e.getMessage());
+                FLAGS + "\nError: " + e.getMessage());
         }
     }
+
+    /** The compiler arguments the confiqureKey injection needs, as the host adds them. */
+    static final String FLAGS =
+        "  -J--add-opens=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED\n" +
+        "  --add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED (and other com.sun.tools.javac.* packages)";
 
     /** {@code ToolClass.method}: two Java identifiers joined by one dot. */
     static final java.util.regex.Pattern VERIFIED_BY = java.util.regex.Pattern.compile(
@@ -84,7 +87,20 @@ public class ConfiqureProcessor extends AbstractProcessor {
                     element);
             }
         }
-        if (!initialized) return false;
+        if (!initialized) {
+            // Review 10976: an object class compiled without its confiqureKey breaks the host DTO contract, so it is a
+            // readable compile error naming the class and the flags; a class with no object annotation compiles as before.
+            for (Class<? extends java.lang.annotation.Annotation> objectAnnotation : OBJECT_ANNOTATIONS) {
+                for (Element element : roundEnv.getElementsAnnotatedWith(objectAnnotation)) {
+                    if (element.getKind() != ElementKind.CLASS) continue;
+                    processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                        "[confiqure] " + element.getSimpleName() + " needs its confiqureKey, and the processor could not "
+                            + "initialize: add to your maven-compiler-plugin compilerArgs:\n" + FLAGS,
+                        element);
+                }
+            }
+            return false;
+        }
         for (Class<? extends java.lang.annotation.Annotation> objectAnnotation : OBJECT_ANNOTATIONS) {
             for (Element element : roundEnv.getElementsAnnotatedWith(objectAnnotation)) {
                 if (element.getKind() != ElementKind.CLASS) continue;
