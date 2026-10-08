@@ -15,7 +15,9 @@ A comment guides the model; a declaration on the field is what the engine enforc
   names one of your tool operations. The engine calls it with the value before setting it; it answers ok, not ok with
   a message, or a corrected value. The name is checked at compile time.
 - **Confiqure verifiers** need an outside answer Confiqure provides: `@Confiqure.Verify(Confiqure.ValidatorKind.ADDRESS)`
-  checks an address and saves its corrected form.
+  checks an address and saves its corrected form. The engine recognises the address's parts by these field names:
+  street or addressLine1 or line1, addressLine2, city, state or region, postalCode or zip, country; a String field
+  takes the whole address as one line.
 
 Ranges and sizes (`@Min`, `@Max`, `@Size`) are not enforced by Confiqure: write them in the field's comment, and the
 model follows them.

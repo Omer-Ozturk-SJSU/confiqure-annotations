@@ -580,6 +580,10 @@ public @interface Confiqure {
      * The model sees the annotation in the class source; the field's comment still guides how it
      * asks.
      *
+     * <p>The engine recognises the address's parts by these field names: street or addressLine1 or
+     * line1, addressLine2, city, state or region, postalCode or zip, country; a String field takes
+     * the whole address as one line.
+     *
      * <pre>
      * &#64;Confiqure.Verify(Confiqure.ValidatorKind.ADDRESS)
      * private Address shipFrom;
