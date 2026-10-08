@@ -23,7 +23,8 @@ import java.util.Set;
     "ai.confiqure.Confiqure.Setting",
     "ai.confiqure.Confiqure.List",
     "ai.confiqure.Confiqure.User.Setting",
-    "ai.confiqure.Confiqure.User.List"})
+    "ai.confiqure.Confiqure.User.List",
+    "ai.confiqure.Confiqure.VerifiedBy"})
 public class ConfiqureProcessor extends AbstractProcessor {
 
     /** Every annotation that marks a class as a saveable object: each gets a {@code confiqureKey}. */
@@ -64,8 +65,23 @@ public class ConfiqureProcessor extends AbstractProcessor {
         }
     }
 
+    /** {@code ToolClass.method}: two Java identifiers joined by one dot. */
+    static final java.util.regex.Pattern VERIFIED_BY = java.util.regex.Pattern.compile(
+        "[A-Za-z_$][A-Za-z0-9_$]*\\.[A-Za-z_$][A-Za-z0-9_$]*");
+
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+        // 3.1: @Confiqure.VerifiedBy names "ToolClass.method"; a malformed name fails the compile, not a chat. Needs no
+        // javac internals, so it runs even when the confiqureKey injection below could not initialize.
+        for (Element element : roundEnv.getElementsAnnotatedWith(Confiqure.VerifiedBy.class)) {
+            String value = element.getAnnotation(Confiqure.VerifiedBy.class).value();
+            if (value == null || !VERIFIED_BY.matcher(value.strip()).matches()) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    "[confiqure] @Confiqure.VerifiedBy(\"" + value + "\") on " + element.getSimpleName()
+                        + " must name a tool operation as \"ToolClass.method\", e.g. \"CatalogTool.verifyProductCode\".",
+                    element);
+            }
+        }
         if (!initialized) return false;
         for (Class<? extends java.lang.annotation.Annotation> objectAnnotation : OBJECT_ANNOTATIONS) {
             for (Element element : roundEnv.getElementsAnnotatedWith(objectAnnotation)) {

@@ -432,6 +432,199 @@ public @interface Confiqure {
         OTHER
     }
 
+    // ---- Validators and verifiers (3.1) ----------------------------------------------------------
+    //
+    // A comment guides the model; a declaration on the field is what the engine enforces. Ranges
+    // and sizes (@Min, @Max, @Size) are not enforced by Confiqure: write them in the field's comment.
+
+    /**
+     * The value must be an email address.
+     *
+     * <p>The engine checks every value the chat sets on this field and refuses one that is not an
+     * email address, with {@link #message()} or one plain sentence naming the field. The model sees
+     * the annotation in the class source; the field's comment still guides how it asks.
+     *
+     * <pre>
+     * &#64;Confiqure.Email
+     * private String contactEmail;
+     * </pre>
+     *
+     * @since 3.1
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Email {
+        /** The sentence the user gets when the value is refused. Defaults to the engine's own sentence. */
+        String message() default "";
+    }
+
+    /**
+     * The value must be a North American phone number: 10 digits, or 11 with a leading 1; spaces,
+     * dashes, dots, parentheses and a leading {@code +} are allowed.
+     *
+     * <p>The engine checks every value the chat sets on this field and refuses any other form, with
+     * {@link #message()} or one plain sentence naming the field. The model sees the annotation in
+     * the class source; the field's comment still guides how it asks.
+     *
+     * <pre>
+     * &#64;Confiqure.NAPhoneNumber
+     * private String supportPhone;
+     * </pre>
+     *
+     * @since 3.1
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface NAPhoneNumber {
+        /** The sentence the user gets when the value is refused. Defaults to the engine's own sentence. */
+        String message() default "";
+    }
+
+    /**
+     * The value must be a UK phone number: the national form starting with 0, or the international
+     * form starting with +44, at the usual lengths; spaces and dashes are allowed.
+     *
+     * <p>The engine checks every value the chat sets on this field and refuses any other form, with
+     * {@link #message()} or one plain sentence naming the field. The model sees the annotation in
+     * the class source; the field's comment still guides how it asks.
+     *
+     * <pre>
+     * &#64;Confiqure.UKPhoneNumber
+     * private String officePhone;
+     * </pre>
+     *
+     * @since 3.1
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface UKPhoneNumber {
+        /** The sentence the user gets when the value is refused. Defaults to the engine's own sentence. */
+        String message() default "";
+    }
+
+    /**
+     * The value must be a phone number of any country in international form: an optional leading
+     * {@code +}, then 7 to 15 digits (E.164-shaped); spaces, dashes, dots and parentheses are allowed.
+     *
+     * <p>The engine checks every value the chat sets on this field and refuses any other form, with
+     * {@link #message()} or one plain sentence naming the field. The model sees the annotation in
+     * the class source; the field's comment still guides how it asks.
+     *
+     * <pre>
+     * &#64;Confiqure.WorldPhoneNumber
+     * private String whatsappNumber;
+     * </pre>
+     *
+     * @since 3.1
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface WorldPhoneNumber {
+        /** The sentence the user gets when the value is refused. Defaults to the engine's own sentence. */
+        String message() default "";
+    }
+
+    /**
+     * The value must be a US ZIP code: 5 digits, or ZIP+4 ({@code 12345-6789}).
+     *
+     * <p>The engine checks every value the chat sets on this field and refuses any other form, with
+     * {@link #message()} or one plain sentence naming the field. The model sees the annotation in
+     * the class source; the field's comment still guides how it asks.
+     *
+     * <pre>
+     * &#64;Confiqure.USZipCode
+     * private String warehouseZip;
+     * </pre>
+     *
+     * @since 3.1
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface USZipCode {
+        /** The sentence the user gets when the value is refused. Defaults to the engine's own sentence. */
+        String message() default "";
+    }
+
+    /**
+     * Names YOUR tool method that verifies this field's value, as {@code "ToolClass.method"} — a
+     * domain check only your application can make (a product code exists, an account is open).
+     *
+     * <p>Before the value is set, the engine calls that method with the value (and the record's key
+     * when one exists). It answers ok; not ok with a message, which the user gets; or a corrected
+     * value, which is saved instead. The model sees the annotation in the class source; the
+     * field's comment still guides how it asks. The name is checked at compile time.
+     *
+     * <pre>
+     * &#64;Confiqure.VerifiedBy("CatalogTool.verifyProductCode")
+     * private String productCode;
+     * </pre>
+     *
+     * @since 3.1
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface VerifiedBy {
+        /** The verifying operation, {@code "ToolClass.method"}: a method of one of your {@link Tool} classes. */
+        String value();
+
+        /** The sentence the user gets when the value is refused. Defaults to the verifier's own message. */
+        String message() default "";
+    }
+
+    /**
+     * Names a verifier Confiqure runs on this field's value, one that needs an outside answer
+     * (today: {@link ValidatorKind#ADDRESS}, the address check).
+     *
+     * <p>The engine runs it before the value is set and saves the corrected value it returns (a
+     * checked address, at once), or refuses the value with one plain sentence naming the field.
+     * The model sees the annotation in the class source; the field's comment still guides how it
+     * asks.
+     *
+     * <pre>
+     * &#64;Confiqure.Verify(Confiqure.ValidatorKind.ADDRESS)
+     * private Address shipFrom;
+     * </pre>
+     *
+     * @since 3.1
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Verify {
+        /** Which Confiqure verifier runs on the value. */
+        ValidatorKind value();
+    }
+
+    /** The verifiers Confiqure runs for {@link Verify}. More join later. */
+    enum ValidatorKind {
+        /** A postal address, checked and returned in its corrected form. */
+        ADDRESS
+    }
+
+    /**
+     * On an operation of a {@link Tool} class that deletes, stops or cancels something: the call
+     * runs only with {@code confirmed=true}.
+     *
+     * <p>The engine shows the user a confirmation card first ({@link #text()} as its words, or its
+     * own), and sets {@code confirmed=true} only from the user's click on that card; without the
+     * click the call is never made. The model sees the annotation in the class source and asks for
+     * the call; the click is the yes. The 3.1 form of a per-operation {@link Consent}; Consent on a
+     * field stays as it is.
+     *
+     * <pre>
+     * &#64;Confiqure.Confirm(text = "Stop this schedule?")
+     * &#64;PostMapping("/schedules/stop")
+     * public Ack stopSchedule(&#64;RequestBody ScheduleRef ref) { ... }
+     * </pre>
+     *
+     * @since 3.1
+     */
+    @Target(ElementType.METHOD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Confirm {
+        /** The card's question to the user. Defaults to the engine's own words for the operation. */
+        String text() default "";
+    }
+
     /**
      * Opts a {@link List} (or {@link User.List}) object OUT of chat deletion. By default a List
      * object's records can be deleted from chat — the user asks, the engine shows a
