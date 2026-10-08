@@ -65,10 +65,19 @@ public class ConfiqureProcessor extends AbstractProcessor {
         }
     }
 
-    /** The compiler arguments the confiqureKey injection needs, as the host adds them. */
+    /**
+     * The compiler arguments the confiqureKey injection needs, as the host adds them. They are JVM options (-J…): the
+     * processor runs inside javac's own JVM, so a plain --add-exports (a compile option) does not reach it (review 10978).
+     * One per package init and the injection touch. In Maven they take effect only with fork=true.
+     */
     static final String FLAGS =
+        "  -J--add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED\n" +
+        "  -J--add-exports=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED\n" +
+        "  -J--add-exports=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED\n" +
+        "  -J--add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED\n" +
+        "  -J--add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED\n" +
         "  -J--add-opens=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED\n" +
-        "  --add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED (and other com.sun.tools.javac.* packages)";
+        "and <fork>true</fork> on the maven-compiler-plugin (the -J options reach only a forked javac).";
 
     /** {@code ToolClass.method}: two Java identifiers joined by one dot. */
     static final java.util.regex.Pattern VERIFIED_BY = java.util.regex.Pattern.compile(

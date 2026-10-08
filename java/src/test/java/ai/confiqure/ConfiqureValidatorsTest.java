@@ -134,6 +134,33 @@ class ConfiqureValidatorsTest {
         assertTrue(!bad.output.contains("uncaught exception"), bad.output);
     }
 
+    /**
+     * Review 10978: the flags the message tells the host to add are the ones that work. javac run with exactly the -J options
+     * taken from the message's text compiles the Setting class, and the class carries its confiqureKey.
+     */
+    @Test
+    void theFlagsTheMessageNamesAreTheOnesThatMakeTheBuildWork() throws Exception {
+        List<String> flags = new java.util.ArrayList<>();
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("-J--add-\\S+").matcher(ConfiqureProcessor.FLAGS);
+        while (m.find()) flags.add(m.group());
+        assertEquals(6, flags.size(), ConfiqureProcessor.FLAGS);
+        assertTrue(ConfiqureProcessor.FLAGS.contains("<fork>true</fork>"), ConfiqureProcessor.FLAGS);
+
+        java.io.File dir = Files.createTempDirectory("confiqure-with-flags").toFile();
+        java.io.File pkg = new java.io.File(dir, "demo");
+        assertTrue(pkg.mkdirs());
+        java.io.File setting = write(pkg, "DemoSettings.java", SETTING);
+        Result r = javac(dir, setting, flags);
+        assertEquals(0, r.exit, r.output);
+        assertTrue(!r.output.contains("could not initialize"), r.output);
+        try (java.net.URLClassLoader loader = new java.net.URLClassLoader(
+                new java.net.URL[]{new java.io.File(dir, "out").toURI().toURL()}, getClass().getClassLoader())) {
+            Class<?> c = loader.loadClass("demo.DemoSettings");
+            assertEquals(String.class, c.getMethod("getConfiqureKey").getReturnType());
+            assertEquals(String.class, c.getDeclaredField("confiqureKey").getType());
+        }
+    }
+
     private static java.io.File write(java.io.File pkg, String name, String code) throws Exception {
         java.io.File f = new java.io.File(pkg, name);
         Files.write(f.toPath(), code.getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -151,10 +178,18 @@ class ConfiqureValidatorsTest {
     }
 
     private static Result javac(java.io.File dir, java.io.File source) throws Exception {
+        return javac(dir, source, Collections.emptyList());
+    }
+
+    private static Result javac(java.io.File dir, java.io.File source, List<String> jvmFlags) throws Exception {
         String javac = System.getProperty("java.home") + java.io.File.separator + "bin" + java.io.File.separator + "javac";
         String cp = System.getProperty("java.class.path");
-        ProcessBuilder pb = new ProcessBuilder(javac, "-cp", cp, "-processorpath", cp,
-                "-processor", ConfiqureProcessor.class.getName(), "-d", new java.io.File(dir, "out").getPath(), source.getPath());
+        List<String> cmd = new java.util.ArrayList<>();
+        cmd.add(javac);
+        cmd.addAll(jvmFlags);
+        cmd.addAll(Arrays.asList("-cp", cp, "-processorpath", cp,
+                "-processor", ConfiqureProcessor.class.getName(), "-d", new java.io.File(dir, "out").getPath(), source.getPath()));
+        ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);
         Process p = pb.start();
         String out = new String(p.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);

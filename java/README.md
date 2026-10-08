@@ -23,3 +23,20 @@ model follows them.
 `@Confiqure.Confirm` on a tool operation that deletes, stops, pauses or cancels something, or changes something
 live (a live price), makes the call run only with `confirmed=true`. The engine sets it only from the user's click
 on the confirmation card it shows.
+
+## Compiling a host
+
+The annotation processor adds a `confiqureKey` to every `@Confiqure.Setting` / `List` class. It runs inside javac's own
+JVM, so it needs these JVM options. In Maven, put them in the `maven-compiler-plugin`'s `compilerArgs` with
+`<fork>true</fork>`, because the `-J` options reach only a forked javac:
+
+```
+-J--add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED
+-J--add-exports=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED
+-J--add-exports=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED
+-J--add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED
+-J--add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED
+-J--add-opens=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED
+```
+
+Without them, the build fails on each object class with a message naming these options.
