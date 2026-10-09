@@ -370,7 +370,7 @@ public @interface Confiqure {
      * target: the conversation can NEVER write it (it is implicitly {@link SystemOnly}) — it is set
      * only from the end user's yes on the consent card the engine renders: an Accept/Decline click,
      * or a typed answer that one model call for that card reads as answering it; never from the chat
-     * model's own word or its inputReceived. The engine shows {@link #text()} word-for-word (an LLM never generates or paraphrases legal
+     * model's own word or the values it reports. The engine shows {@link #text()} word-for-word (an LLM never generates or paraphrases legal
      * text) and records the decision — with a version hash of the exact wording shown — as a
      * compliance audit row ("user U accepted consent v3 at T in conversation C").
      *
