@@ -722,9 +722,10 @@ public @interface Confiqure {
      * changes something live (a live price): the call runs only with {@code confirmed=true}.
      *
      * <p>The engine shows the user a confirmation card first ({@link #text()} as its words, or its
-     * own), and sets {@code confirmed=true} only from the user's click on that card; without the
-     * click the call is never made. The model sees the annotation in the class source and asks for
-     * the call; the click is the yes. The 3.1 form of a per-operation {@link Consent}; Consent on a
+     * own), and sets {@code confirmed=true} only from the user's yes: a click on the card, or a typed
+     * answer that one model call for that card reads as answering it; never from the chat model's
+     * own word. Without that yes the call is never made. The model sees the annotation in the class
+     * source and asks for the call. The 3.1 form of a per-operation {@link Consent}; Consent on a
      * field stays as it is.
      *
      * <pre>

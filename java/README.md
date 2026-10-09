@@ -47,8 +47,10 @@ Ranges and sizes (`@Min`, `@Max`, `@Size`) are not enforced by Confiqure: write 
 model follows them.
 
 `@Confiqure.Confirm` on a tool operation that deletes, stops, pauses or cancels something, or changes something
-live (a live price), makes the call run only with `confirmed=true`. The engine sets it only from the user's click
-on the confirmation card it shows. `@Confiqure.Confirm(false)` turns the card off for that operation.
+live (a live price), makes the call run only with `confirmed=true`. The engine shows a confirmation card and sets it
+only from the user's yes: a click on the card, or a typed answer that one model call for that card reads as answering
+it; never from the chat model's own word. Without that yes the call is never made. `@Confiqure.Confirm(false)` turns
+the card off for that operation.
 
 ## Compiling a host
 
