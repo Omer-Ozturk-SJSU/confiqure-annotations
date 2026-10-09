@@ -367,9 +367,10 @@ public @interface Confiqure {
 
     /**
      * Verbatim, auditable consent capture on a Boolean field. The annotated field is the capture
-     * target: the conversation can NEVER write it (it is implicitly {@link SystemOnly}) — only the
-     * end user's explicit Accept/Decline click on the consent card the engine renders can set it.
-     * The engine shows {@link #text()} word-for-word (an LLM never generates or paraphrases legal
+     * target: the conversation can NEVER write it (it is implicitly {@link SystemOnly}) — it is set
+     * only from the end user's yes on the consent card the engine renders: an Accept/Decline click,
+     * or a typed answer that one model call for that card reads as answering it; never from the chat
+     * model's own word or the values it reports. The engine shows {@link #text()} word-for-word (an LLM never generates or paraphrases legal
      * text) and records the decision — with a version hash of the exact wording shown — as a
      * compliance audit row ("user U accepted consent v3 at T in conversation C").
      *
@@ -432,14 +433,330 @@ public @interface Confiqure {
         OTHER
     }
 
+    // ---- Validators and verifiers (3.1) ----------------------------------------------------------
+    //
+    // A comment guides the model; a declaration on the field is what the engine enforces. Ranges
+    // and sizes (@Min, @Max, @Size) are not enforced by Confiqure: write them in the field's comment.
+
+    /**
+     * The value must be an email address.
+     *
+     * <p>The engine checks every value the chat sets on this field and refuses one that is not an
+     * email address, with {@link #message()} or one plain sentence naming the field. The model sees
+     * the annotation in the class source; the field's comment still guides how it asks.
+     *
+     * <pre>
+     * &#64;Confiqure.Email
+     * private String contactEmail;
+     * </pre>
+     *
+     * @since 3.1
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Email {
+        /** The sentence the user gets when the value is refused. Defaults to the engine's own sentence. */
+        String message() default "";
+    }
+
+    /**
+     * The value must be a North American phone number: 10 digits, or 11 with a leading 1; spaces,
+     * dashes, dots, parentheses and a leading {@code +} are allowed.
+     *
+     * <p>The engine checks every value the chat sets on this field and refuses any other form, with
+     * {@link #message()} or one plain sentence naming the field. The model sees the annotation in
+     * the class source; the field's comment still guides how it asks.
+     *
+     * <pre>
+     * &#64;Confiqure.NAPhoneNumber
+     * private String supportPhone;
+     * </pre>
+     *
+     * @since 3.1
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface NAPhoneNumber {
+        /** The sentence the user gets when the value is refused. Defaults to the engine's own sentence. */
+        String message() default "";
+    }
+
+    /**
+     * The value must be a UK phone number: the national form starting with 0, or the international
+     * form starting with +44, at the usual lengths; spaces and dashes are allowed.
+     *
+     * <p>The engine checks every value the chat sets on this field and refuses any other form, with
+     * {@link #message()} or one plain sentence naming the field. The model sees the annotation in
+     * the class source; the field's comment still guides how it asks.
+     *
+     * <pre>
+     * &#64;Confiqure.UKPhoneNumber
+     * private String officePhone;
+     * </pre>
+     *
+     * @since 3.1
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface UKPhoneNumber {
+        /** The sentence the user gets when the value is refused. Defaults to the engine's own sentence. */
+        String message() default "";
+    }
+
+    /**
+     * The value must be a phone number of any country in international form: an optional leading
+     * {@code +}, then 7 to 15 digits (E.164-shaped); spaces, dashes, dots and parentheses are allowed.
+     *
+     * <p>The engine checks every value the chat sets on this field and refuses any other form, with
+     * {@link #message()} or one plain sentence naming the field. The model sees the annotation in
+     * the class source; the field's comment still guides how it asks.
+     *
+     * <pre>
+     * &#64;Confiqure.WorldPhoneNumber
+     * private String whatsappNumber;
+     * </pre>
+     *
+     * @since 3.1
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface WorldPhoneNumber {
+        /** The sentence the user gets when the value is refused. Defaults to the engine's own sentence. */
+        String message() default "";
+    }
+
+    /**
+     * The value must be a US ZIP code: 5 digits, or ZIP+4 ({@code 12345-6789}).
+     *
+     * <p>The engine checks every value the chat sets on this field and refuses any other form, with
+     * {@link #message()} or one plain sentence naming the field. The model sees the annotation in
+     * the class source; the field's comment still guides how it asks.
+     *
+     * <pre>
+     * &#64;Confiqure.USZipCode
+     * private String warehouseZip;
+     * </pre>
+     *
+     * @since 3.1
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface USZipCode {
+        /** The sentence the user gets when the value is refused. Defaults to the engine's own sentence. */
+        String message() default "";
+    }
+
+    /**
+     * Names YOUR format check for this field's value: a {@link Tool} class implementing
+     * {@link ConfiqureValidator}, whose mapped {@code validate} the engine calls before the value is
+     * set, without the chat model. Not ok refuses the value; the user gets {@link #message()}, else
+     * the validator's own message. The compiler checks that the class is a validator; the CLI checks
+     * at push that it is a pushed tool class with {@code validate} mapped.
+     *
+     * <pre>
+     * &#64;Confiqure.ValidatedBy(SkuFormat.class)
+     * private String sku;
+     * </pre>
+     *
+     * @since 3.1
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface ValidatedBy {
+        /** The validating tool class. */
+        Class<? extends ConfiqureValidator<?>> value();
+
+        /** The sentence the user gets when the value is refused. Defaults to the validator's own message. */
+        String message() default "";
+    }
+
+    /**
+     * Names YOUR domain check for this field's value, one only your application can make (a product
+     * code exists, an account is open): a {@link Tool} class implementing {@link ConfiqureVerifier},
+     * whose mapped {@code verify} the engine calls before the value is set, without the chat model.
+     * It answers ok; not ok, and the user gets {@link #message()}, else the verifier's own message;
+     * or a corrected value, which is saved instead and stated. The compiler checks that the class
+     * is a verifier; the CLI checks at push that it is a pushed tool class with {@code verify} mapped.
+     *
+     * <pre>
+     * &#64;Confiqure.VerifiedBy(CatalogCheck.class)
+     * private String productCode;
+     * </pre>
+     *
+     * <p><b>On a request class</b>, the verifier checks the whole request once every field is set,
+     * before the operation is called: it receives {@code {field: the class's simple name, value: the
+     * whole request object, confiqureKey?}}, so it implements {@code ConfiqureVerifier<TheRequest>}.
+     * Not ok makes no call and the user gets the message; a corrected value is not sent on its own: the chat is
+     * shown the corrected request, and the call goes when the values are given again.
+     *
+     * <pre>
+     * &#64;Confiqure.VerifiedBy(PriceRangeCheck.class)   // implements ConfiqureVerifier&lt;PriceRange&gt;
+     * public class PriceRange {
+     *     private BigDecimal min;
+     *     private BigDecimal max;
+     * }
+     * </pre>
+     *
+     * @since 3.1
+     */
+    @Target({ElementType.FIELD, ElementType.TYPE})
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface VerifiedBy {
+        /** The verifying tool class. */
+        Class<? extends ConfiqureVerifier<?>> value();
+
+        /** The sentence the user gets when the value is refused. Defaults to the verifier's own message. */
+        String message() default "";
+    }
+
+    /**
+     * What the engine sends a {@link ConfiqureValidator} or {@link ConfiqureVerifier}: the field's
+     * name, the value the chat would set, and the record's key when the record exists.
+     *
+     * @param <T> the field's type
+     * @since 3.1
+     */
+    final class Check<T> {
+        private String field;
+        private T value;
+        private String confiqureKey;
+
+        public String getField() { return field; }
+        public void setField(String field) { this.field = field; }
+
+        public T getValue() { return value; }
+        public void setValue(T value) { this.value = value; }
+
+        /** The record's key; null when the value belongs to a record not yet created. */
+        public String getConfiqureKey() { return confiqureKey; }
+        public void setConfiqureKey(String confiqureKey) { this.confiqureKey = confiqureKey; }
+    }
+
+    /**
+     * A check's answer: ok, not ok with a message, or (a verifier only) a corrected value. Build it
+     * with {@link #ok()}, {@link #notOk(String)} or {@link #corrected(Object)}.
+     *
+     * @param <T> the corrected value's type; {@code Void} for a validator, which cannot correct
+     * @since 3.1
+     */
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    final class Verdict<T> {
+        private boolean ok;
+        private String message;
+        private T value;
+
+        /** For JSON binding; build answers with the factories. */
+        public Verdict() {}
+
+        private Verdict(boolean ok, String message, T value) {
+            this.ok = ok;
+            this.message = message;
+            this.value = value;
+        }
+
+        /** The value is good as given. */
+        public static <T> Verdict<T> ok() { return new Verdict<>(true, null, null); }
+
+        /** The value is refused; the user gets {@code message} unless the field declares its own. */
+        public static <T> Verdict<T> notOk(String message) { return new Verdict<>(false, message, null); }
+
+        /** The value is good in this form instead: it is saved, and the user is told. */
+        public static <T> Verdict<T> corrected(T value) { return new Verdict<>(true, null, value); }
+
+        public boolean isOk() { return ok; }
+        public void setOk(boolean ok) { this.ok = ok; }
+
+        public String getMessage() { return message; }
+        public void setMessage(String message) { this.message = message; }
+
+        /** The corrected value; null when the value stands as given. */
+        public T getValue() { return value; }
+        public void setValue(T value) { this.value = value; }
+    }
+
+    /**
+     * Names a check Confiqure itself runs on this field's value, with no call to you (today:
+     * {@link ValidatorKind#ADDRESS}, the address check, and {@link ValidatorKind#PRODUCT_CODE}, the
+     * product-code check).
+     *
+     * <p>The engine runs it before the value is set and saves the corrected value it returns (a
+     * checked address, at once), or refuses the value with one plain sentence naming the field.
+     * The model sees the annotation in the class source; the field's comment still guides how it
+     * asks.
+     *
+     * <p>The engine recognises the address's parts by these field names: street or addressLine1 or
+     * line1, addressLine2, city, state or region, postalCode or zip, country; a String field takes
+     * the whole address as one line.
+     *
+     * <pre>
+     * &#64;Confiqure.Verify(Confiqure.ValidatorKind.ADDRESS)
+     * private Address shipFrom;
+     *
+     * &#64;Confiqure.Verify(Confiqure.ValidatorKind.PRODUCT_CODE)
+     * private String barcode;
+     * </pre>
+     *
+     * @since 3.1
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Verify {
+        /** Which Confiqure verifier runs on the value. */
+        ValidatorKind value();
+    }
+
+    /** The checks Confiqure runs for {@link Verify}. More join later. */
+    enum ValidatorKind {
+        /** A postal address, checked and returned in its corrected form. */
+        ADDRESS,
+        /**
+         * A product code, checked by the engine with no call to you: a GTIN-8, -12, -13 or -14 with
+         * a valid check digit (UPC-A, EAN-13 and ISBN-13 are GTINs), an ISBN-10 with a valid check
+         * digit ({@code X} allowed last), or an ASIN ({@code B0} followed by 8 letters or digits).
+         * Spaces and dashes are ignored. Not ok: one plain sentence naming the field.
+         */
+        PRODUCT_CODE
+    }
+
+    /**
+     * On an operation of a {@link Tool} class that deletes, stops, pauses or cancels something, or
+     * changes something live (a live price): the call runs only with {@code confirmed=true}.
+     *
+     * <p>The engine shows the user a confirmation card first ({@link #text()} as its words, or its
+     * own), and sets {@code confirmed=true} only from the user's yes: a click on the card, or a typed
+     * answer that one model call for that card reads as answering it; never from the chat model's
+     * own word. Without that yes the call is never made. The model sees the annotation in the class
+     * source and asks for the call. The 3.1 form of a per-operation {@link Consent}; Consent on a
+     * field stays as it is.
+     *
+     * <pre>
+     * &#64;Confiqure.Confirm(text = "Stop this schedule?")
+     * &#64;PostMapping("/schedules/stop")
+     * public Ack stopSchedule(&#64;RequestBody ScheduleRef ref) { ... }
+     * </pre>
+     *
+     * @since 3.1
+     */
+    @Target(ElementType.METHOD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Confirm {
+        /** {@code true} (the default): the card is shown. {@code false}: no card for this operation. */
+        boolean value() default true;
+
+        /** The card's question to the user. Defaults to the engine's own words for the operation. */
+        String text() default "";
+    }
+
     /**
      * Opts a {@link List} (or {@link User.List}) object OUT of chat deletion. By default a List
      * object's records can be deleted from chat — the user asks, the engine shows a
-     * direct-bind confirmation card, and only the user's click disposes (soft-delete; the data is
-     * staff-recoverable, and your application is notified via the {@code config.deleted} /
-     * {@code config.bulk_deleted} lifecycle webhooks). Add {@code @Confiqure.Protect} to a class
-     * whose instances must NEVER be chat-deletable — audit logs, immutable records, anything whose
-     * removal should only ever happen through your own application:
+     * direct-bind confirmation card, and only the user's yes disposes: a click on the card, or a
+     * typed answer that one model call for that card reads as answering it; never the chat model's
+     * own word (soft-delete; the data is staff-recoverable, and your application is notified via
+     * the {@code config.deleted} / {@code config.bulk_deleted} lifecycle webhooks). Add
+     * {@code @Confiqure.Protect} to a class whose instances must NEVER be chat-deletable — audit
+     * logs, immutable records, anything whose removal should only ever happen through your own
+     * application:
      *
      * <pre>
      * &#64;Confiqure.List(end = "/audit-entries")

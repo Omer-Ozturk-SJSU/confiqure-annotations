@@ -55,18 +55,45 @@ public class ConfiqureProcessor extends AbstractProcessor {
             this.treeMaker = TreeMaker.instance(context);
             this.names = Names.instance(context);
             this.initialized = true;
-        } catch (Exception e) {
+        } catch (Exception | LinkageError e) {
+            // Without the javac exports the internal API calls throw IllegalAccessError, an Error: caught here too, so the
+            // host's compile carries on with this warning instead of aborting.
             processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING,
                 "[confiqure] processor could not initialize. Add the following to your maven-compiler-plugin compilerArgs:\n" +
-                "  -J--add-opens=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED\n" +
-                "  --add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED (and other com.sun.tools.javac.* packages)\n" +
-                "Error: " + e.getMessage());
+                FLAGS + "\nError: " + e.getMessage());
         }
     }
 
+    /**
+     * The compiler arguments the confiqureKey injection needs, as the host adds them. They are JVM options (-J…): the
+     * processor runs inside javac's own JVM, so a plain --add-exports (a compile option) does not reach it (review 10978).
+     * One per package init and the injection touch. In Maven they take effect only with fork=true.
+     */
+    static final String FLAGS =
+        "  -J--add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED\n" +
+        "  -J--add-exports=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED\n" +
+        "  -J--add-exports=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED\n" +
+        "  -J--add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED\n" +
+        "  -J--add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED\n" +
+        "  -J--add-opens=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED\n" +
+        "and <fork>true</fork> on the maven-compiler-plugin (the -J options reach only a forked javac).";
+
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        if (!initialized) return false;
+        if (!initialized) {
+            // Review 10976: an object class compiled without its confiqureKey breaks the host DTO contract, so it is a
+            // readable compile error naming the class and the flags; a class with no object annotation compiles as before.
+            for (Class<? extends java.lang.annotation.Annotation> objectAnnotation : OBJECT_ANNOTATIONS) {
+                for (Element element : roundEnv.getElementsAnnotatedWith(objectAnnotation)) {
+                    if (element.getKind() != ElementKind.CLASS) continue;
+                    processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                        "[confiqure] " + element.getSimpleName() + " needs its confiqureKey, and the processor could not "
+                            + "initialize: add to your maven-compiler-plugin compilerArgs:\n" + FLAGS,
+                        element);
+                }
+            }
+            return false;
+        }
         for (Class<? extends java.lang.annotation.Annotation> objectAnnotation : OBJECT_ANNOTATIONS) {
             for (Element element : roundEnv.getElementsAnnotatedWith(objectAnnotation)) {
                 if (element.getKind() != ElementKind.CLASS) continue;
