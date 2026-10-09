@@ -585,7 +585,8 @@ public @interface Confiqure {
      * <p><b>On a request class</b>, the verifier checks the whole request once every field is set,
      * before the operation is called: it receives {@code {field: the class's simple name, value: the
      * whole request object, confiqureKey?}}, so it implements {@code ConfiqureVerifier<TheRequest>}.
-     * Not ok makes no call and the user gets the message; a corrected value is the request sent.
+     * Not ok makes no call and the user gets the message; a corrected value is not sent on its own: the chat is
+     * shown the corrected request, and the call goes when the values are given again.
      *
      * <pre>
      * &#64;Confiqure.VerifiedBy(PriceRangeCheck.class)   // implements ConfiqureVerifier&lt;PriceRange&gt;

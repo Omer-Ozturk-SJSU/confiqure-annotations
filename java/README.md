@@ -33,6 +33,8 @@ A comment guides the model; a declaration on the field is what the engine enforc
       }
   }
   ```
+  These host checks, `Verify(ValidatorKind.PRODUCT_CODE)` and `Confirm(false)` take effect with the next engine deploy;
+  until then the engine skips them.
 - **Confiqure checks** run in the engine with no call to you, through `@Confiqure.Verify(...)`:
   - `ValidatorKind.ADDRESS` checks an address and saves its corrected form. The engine recognises the address's parts
     by these field names: street or addressLine1 or line1, addressLine2, city, state or region, postalCode or zip,
