@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** 3.1: the named validators, the verifiers and Confirm compile where they belong; a bad VerifiedBy name fails the compile. */
+/** 3.1: the named validators, the verifiers and Confirm compile where they belong; a ValidatedBy or VerifiedBy naming the wrong kind of class fails the compile. */
 class ConfiqureValidatorsTest {
 
     private static final String SETTING = "package demo;\n"
@@ -32,15 +32,50 @@ class ConfiqureValidatorsTest {
             + "    @Confiqure.UKPhoneNumber private String officePhone;\n"
             + "    @Confiqure.WorldPhoneNumber private String whatsappNumber;\n"
             + "    @Confiqure.USZipCode(message = \"Give a 5-digit ZIP code.\") private String warehouseZip;\n"
-            + "    @Confiqure.VerifiedBy(\"DemoTool.verifyCode\") private String code;\n"
+            + "    @Confiqure.VerifiedBy(DemoCheck.class) private String code;\n"
+            + "    @Confiqure.ValidatedBy(value = DemoFormat.class, message = \"A code looks like ABC-1234.\") private String sku;\n"
             + "    @Confiqure.Verify(Confiqure.ValidatorKind.ADDRESS) private String shipFrom;\n"
+            + "    @Confiqure.Verify(Confiqure.ValidatorKind.PRODUCT_CODE) private String barcode;\n"
+            + "}\n";
+
+    /** A host verifier: a tool class implementing ConfiqureVerifier, its verify mapped like any operation. */
+    private static final String CHECK = "package demo;\n"
+            + "import ai.confiqure.Confiqure;\n"
+            + "import ai.confiqure.ConfiqureVerifier;\n"
+            + "@Confiqure.Tool\n"
+            + "public class DemoCheck implements ConfiqureVerifier<String> {\n"
+            + "    public Confiqure.Verdict<String> verify(Confiqure.Check<String> check) {\n"
+            + "        String code = check.getValue().strip();\n"
+            + "        return code.equals(check.getValue()) ? Confiqure.Verdict.ok() : Confiqure.Verdict.corrected(code);\n"
+            + "    }\n"
+            + "}\n";
+
+    /** A host validator: ok or not ok, never a corrected value. */
+    private static final String FORMAT = "package demo;\n"
+            + "import ai.confiqure.Confiqure;\n"
+            + "import ai.confiqure.ConfiqureValidator;\n"
+            + "@Confiqure.Tool\n"
+            + "public class DemoFormat implements ConfiqureValidator<String> {\n"
+            + "    public Confiqure.Verdict<Void> validate(Confiqure.Check<String> check) {\n"
+            + "        return check.getValue().matches(\"[A-Z]{3}-\\\\d{4}\") ? Confiqure.Verdict.ok() : Confiqure.Verdict.notOk(\"Not a code.\");\n"
+            + "    }\n"
             + "}\n";
 
     private static final String TOOL = "package demo;\n"
             + "import ai.confiqure.Confiqure;\n"
             + "@Confiqure.Tool(name = \"DemoTool\")\n"
             + "public class DemoTool {\n"
-            + "    public static class CodeRequest { @Confiqure.VerifiedBy(\"DemoTool.verifyCode\") public String code; }\n"
+            + "    public static class CodeRequest { @Confiqure.VerifiedBy(DemoCheck.class) public String code; }\n"
+            + "    @Confiqure.VerifiedBy(RangeCheck.class)\n"
+            + "    public static class Range { public int min; public int max; }\n"
+            + "    public static class RangeCheck implements ai.confiqure.ConfiqureVerifier<Range> {\n"
+            + "        public Confiqure.Verdict<Range> verify(Confiqure.Check<Range> check) {\n"
+            + "            return check.getValue().min <= check.getValue().max ? Confiqure.Verdict.ok() : Confiqure.Verdict.notOk(\"min above max\");\n"
+            + "        }\n"
+            + "    }\n"
+            + "    public boolean setRange(Range in) { return true; }\n"
+            + "    @Confiqure.Confirm(false)\n"
+            + "    public boolean pauseDemo(CodeRequest in) { return true; }\n"
             + "    public boolean verifyCode(CodeRequest in) { return true; }\n"
             + "    @Confiqure.Confirm(text = \"Stop the demo schedule?\")\n"
             + "    public boolean stopSchedule(CodeRequest in) { return true; }\n"
@@ -48,25 +83,60 @@ class ConfiqureValidatorsTest {
 
     @Test
     void everyNewAnnotationCompilesOnASettingFieldAToolRequestFieldAndAToolOperation() throws Exception {
-        List<Diagnostic<? extends JavaFileObject>> errors = compile(source("demo.DemoSettings", SETTING), source("demo.DemoTool", TOOL));
+        // a full compile, so the examples' bodies are type-checked too
+        List<Diagnostic<? extends JavaFileObject>> errors = compile(false, source("demo.DemoSettings", SETTING), source("demo.DemoTool", TOOL),
+                source("demo.DemoCheck", CHECK), source("demo.DemoFormat", FORMAT));
         assertEquals(Collections.emptyList(), messages(errors));
     }
 
+    /** CC-5: the retired "ToolClass.method" name check stopped a VerifiedBy that names no verifier; the type bound stops it now. */
     @Test
-    void aVerifiedByThatIsNotToolClassDotMethodFailsTheCompileWithAClearMessage() throws Exception {
-        String bad = SETTING.replace("\"DemoTool.verifyCode\"", "\"verifyCode\"");
-        List<String> errors = messages(compile(source("demo.DemoSettings", bad)));
-        assertEquals(1, errors.size(), errors.toString());
-        assertTrue(errors.get(0).contains("@Confiqure.VerifiedBy(\"verifyCode\") on code must name a tool operation as \"ToolClass.method\""),
-                errors.get(0));
+    void aVerifiedByNamingAValidatorOrAPlainClassFailsTheCompile() throws Exception {
+        for (String wrong : Arrays.asList("DemoFormat.class", "String.class")) {
+            String bad = SETTING.replace("VerifiedBy(DemoCheck.class)", "VerifiedBy(" + wrong + ")");
+            List<String> errors = messages(compile(source("demo.DemoSettings", bad), source("demo.DemoCheck", CHECK),
+                    source("demo.DemoFormat", FORMAT)));
+            assertEquals(1, errors.size(), wrong + ": " + errors);
+        }
     }
 
     @Test
-    void theNamePatternTakesOnlyTwoIdentifiersJoinedByOneDot() {
-        assertTrue(ConfiqureProcessor.VERIFIED_BY.matcher("DemoTool.verifyCode").matches());
-        for (String no : Arrays.asList("verifyCode", "DemoTool.", ".verifyCode", "a.b.c", "Demo Tool.verify", "DemoTool#verify")) {
-            assertTrue(!ConfiqureProcessor.VERIFIED_BY.matcher(no).matches(), no);
+    void aValidatedByNamingAVerifierOrAPlainClassFailsTheCompile() throws Exception {
+        for (String wrong : Arrays.asList("DemoCheck.class", "String.class")) {
+            String bad = SETTING.replace("ValidatedBy(value = DemoFormat.class", "ValidatedBy(value = " + wrong);
+            List<String> errors = messages(compile(source("demo.DemoSettings", bad), source("demo.DemoCheck", CHECK),
+                    source("demo.DemoFormat", FORMAT)));
+            assertEquals(1, errors.size(), wrong + ": " + errors);
         }
+    }
+
+    @Test
+    void aValidatorCannotAnswerWithACorrectedValue() throws Exception {
+        String bad = FORMAT.replace("Confiqure.Verdict.ok() :", "Confiqure.Verdict.corrected(\"ABC-1234\") :");
+        // a full compile: -proc:only never attributes method bodies
+        List<String> errors = messages(compile(false, source("demo.DemoFormat", bad)));
+        assertEquals(1, errors.size(), errors.toString());
+        assertEquals(Collections.emptyList(), messages(compile(false, source("demo.DemoFormat", FORMAT))));
+    }
+
+    /**
+     * The wire DispatcherHostVerifier reads: {ok, message?, value?}. An ok answer carries no "value" key at all (a null
+     * one would read as a value corrected to null); not ok carries its message; corrected carries the value.
+     */
+    @Test
+    void theVerdictWritesTheEngineWireAndTheCheckReadsIt() throws Exception {
+        com.fasterxml.jackson.databind.ObjectMapper json = new com.fasterxml.jackson.databind.ObjectMapper();
+        assertEquals("{\"ok\":true}", json.writeValueAsString(Confiqure.Verdict.ok()));
+        assertEquals("{\"ok\":false,\"message\":\"No product has that code.\"}",
+                json.writeValueAsString(Confiqure.Verdict.notOk("No product has that code.")));
+        assertEquals("{\"ok\":true,\"value\":\"ABC-1234\"}", json.writeValueAsString(Confiqure.Verdict.corrected("ABC-1234")));
+
+        Confiqure.Check<String> check = json.readValue("{\"field\":\"sku\",\"value\":\"abc-1234\",\"confiqureKey\":\"k-1\"}",
+                new com.fasterxml.jackson.core.type.TypeReference<Confiqure.Check<String>>() {});
+        assertEquals("sku", check.getField());
+        assertEquals("abc-1234", check.getValue());
+        assertEquals("k-1", check.getConfiqureKey());
+        assertEquals(null, json.readValue("{\"field\":\"sku\",\"value\":\"x\"}", Confiqure.Check.class).getConfiqureKey());
     }
 
     // ------------------------------------------------------------------ in-process javac with the processor
@@ -81,11 +151,16 @@ class ConfiqureValidatorsTest {
     }
 
     private static List<Diagnostic<? extends JavaFileObject>> compile(JavaFileObject... sources) throws Exception {
+        return compile(true, sources);
+    }
+
+    private static List<Diagnostic<? extends JavaFileObject>> compile(boolean procOnly, JavaFileObject... sources) throws Exception {
         JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
         DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
         File out = Files.createTempDirectory("confiqure-processor-test").toFile();
         try (StandardJavaFileManager files = javac.getStandardFileManager(diagnostics, null, null)) {
-            List<String> options = Arrays.asList("-classpath", System.getProperty("java.class.path"), "-d", out.getPath(), "-proc:only");
+            List<String> options = new java.util.ArrayList<>(Arrays.asList("-classpath", System.getProperty("java.class.path"), "-d", out.getPath()));
+            if (procOnly) options.add("-proc:only");
             JavaCompiler.CompilationTask task = javac.getTask(null, files, diagnostics, options, null, Arrays.asList(sources));
             task.setProcessors(Collections.singletonList(new ConfiqureProcessor()));
             task.call();
@@ -100,7 +175,7 @@ class ConfiqureValidatorsTest {
     /**
      * A host that compiles WITHOUT the javac exports (a separate javac, so none of this JVM's opens apply): never javac's
      * uncaught-exception abort. An object class fails with a readable error naming it and the flags (it would ship without
-     * its confiqureKey); a plain class compiles, and a bad VerifiedBy on it fails with its own message only.
+     * its confiqureKey); a plain class compiles, and a VerifiedBy naming no verifier fails with javac's own error only.
      */
     @Test
     void withoutTheJavacExports_anObjectClassFailsReadably_andAPlainClassCompilesWithItsOwnChecks() throws Exception {
@@ -108,6 +183,8 @@ class ConfiqureValidatorsTest {
         java.io.File pkg = new java.io.File(dir, "demo");
         assertTrue(pkg.mkdirs());
 
+        write(pkg, "DemoCheck.java", CHECK);
+        write(pkg, "DemoFormat.java", FORMAT);
         java.io.File setting = write(pkg, "DemoSettings.java", SETTING);
         Result object = javac(dir, setting);
         assertTrue(object.exit != 0, object.output);
@@ -119,17 +196,17 @@ class ConfiqureValidatorsTest {
         String plain = "package demo;\n"
                 + "import ai.confiqure.Confiqure;\n"
                 + "public class DemoRequest {\n"
-                + "    @Confiqure.VerifiedBy(\"DemoTool.verifyCode\") public String code;\n"
+                + "    @Confiqure.VerifiedBy(DemoCheck.class) public String code;\n"
                 + "}\n";
         java.io.File request = write(pkg, "DemoRequest.java", plain);
         Result good = javac(dir, request);
         assertEquals(0, good.exit, good.output);
         assertTrue(!good.output.contains("needs its confiqureKey"), good.output);
 
-        write(pkg, "DemoRequest.java", plain.replace("\"DemoTool.verifyCode\"", "\"verifyCode\""));
+        write(pkg, "DemoRequest.java", plain.replace("DemoCheck.class", "String.class"));
         Result bad = javac(dir, request);
         assertTrue(bad.exit != 0, bad.output);
-        assertTrue(bad.output.contains("must name a tool operation as \"ToolClass.method\""), bad.output);
+        assertTrue(bad.output.contains("incompatible types"), bad.output);
         assertTrue(!bad.output.contains("needs its confiqureKey"), bad.output);
         assertTrue(!bad.output.contains("uncaught exception"), bad.output);
     }
@@ -149,6 +226,8 @@ class ConfiqureValidatorsTest {
         java.io.File dir = Files.createTempDirectory("confiqure-with-flags").toFile();
         java.io.File pkg = new java.io.File(dir, "demo");
         assertTrue(pkg.mkdirs());
+        write(pkg, "DemoCheck.java", CHECK);
+        write(pkg, "DemoFormat.java", FORMAT);
         java.io.File setting = write(pkg, "DemoSettings.java", SETTING);
         Result r = javac(dir, setting, flags);
         assertEquals(0, r.exit, r.output);
@@ -187,7 +266,7 @@ class ConfiqureValidatorsTest {
         List<String> cmd = new java.util.ArrayList<>();
         cmd.add(javac);
         cmd.addAll(jvmFlags);
-        cmd.addAll(Arrays.asList("-cp", cp, "-processorpath", cp,
+        cmd.addAll(Arrays.asList("-cp", cp, "-sourcepath", dir.getPath(), "-processorpath", cp,
                 "-processor", ConfiqureProcessor.class.getName(), "-d", new java.io.File(dir, "out").getPath(), source.getPath()));
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);

@@ -11,20 +11,42 @@ A comment guides the model; a declaration on the field is what the engine enforc
 - **Named validators** check a general format on the value itself: `@Confiqure.Email`, `@Confiqure.NAPhoneNumber`,
   `@Confiqure.UKPhoneNumber`, `@Confiqure.WorldPhoneNumber`, `@Confiqure.USZipCode`. Each takes an optional
   `message`, the sentence the user gets when a value is refused. More join over time.
-- **Host verifiers** check a domain value only your application can judge: `@Confiqure.VerifiedBy("ToolClass.method")`
-  names one of your tool operations. The engine calls it with the value before setting it; it answers ok, not ok with
-  a message, or a corrected value. The name is checked at compile time.
-- **Confiqure verifiers** need an outside answer Confiqure provides: `@Confiqure.Verify(Confiqure.ValidatorKind.ADDRESS)`
-  checks an address and saves its corrected form. The engine recognises the address's parts by these field names:
-  street or addressLine1 or line1, addressLine2, city, state or region, postalCode or zip, country; a String field
-  takes the whole address as one line.
+- **Host checks** are your own, run by the engine without the chat model. A `@Confiqure.Tool` class implements
+  `ConfiqureValidator<T>` (a format check: ok, or not ok with a message) or `ConfiqureVerifier<T>` (a domain check only
+  your application can make: ok, not ok with a message, or a corrected value), with its `validate` / `verify` mapped
+  like any operation. Attach it to a field with `@Confiqure.ValidatedBy(SkuFormat.class)` or
+  `@Confiqure.VerifiedBy(CatalogCheck.class)`, each with an optional `message`. The engine POSTs
+  `{field, value, confiqureKey?}` and reads back `Confiqure.Verdict` (`ok()`, `notOk(message)`, `corrected(value)`).
+  The compiler checks the class is the right kind; the CLI checks at push that it is a pushed tool class with the
+  method mapped. `@Confiqure.VerifiedBy` on a request class checks the whole request before the operation is called
+  (`value` is the request object, `field` the class's simple name).
+
+  ```java
+  @Confiqure.Tool
+  @RestController
+  public class SkuFormat implements ConfiqureValidator<String> {
+      @PostMapping("/checks/sku-format")
+      public Confiqure.Verdict<Void> validate(@RequestBody Confiqure.Check<String> check) {
+          return check.getValue().matches("[A-Z]{3}-\\d{4}")
+              ? Confiqure.Verdict.ok()
+              : Confiqure.Verdict.notOk("A SKU looks like ABC-1234.");
+      }
+  }
+  ```
+- **Confiqure checks** run in the engine with no call to you, through `@Confiqure.Verify(...)`:
+  - `ValidatorKind.ADDRESS` checks an address and saves its corrected form. The engine recognises the address's parts
+    by these field names: street or addressLine1 or line1, addressLine2, city, state or region, postalCode or zip,
+    country; a String field takes the whole address as one line.
+  - `ValidatorKind.PRODUCT_CODE` accepts a GTIN-8, -12, -13 or -14 with a valid check digit (UPC-A, EAN-13 and ISBN-13
+    are GTINs), an ISBN-10 with a valid check digit (`X` allowed last), or an ASIN (`B0` followed by 8 letters or
+    digits); spaces and dashes are ignored.
 
 Ranges and sizes (`@Min`, `@Max`, `@Size`) are not enforced by Confiqure: write them in the field's comment, and the
 model follows them.
 
 `@Confiqure.Confirm` on a tool operation that deletes, stops, pauses or cancels something, or changes something
 live (a live price), makes the call run only with `confirmed=true`. The engine sets it only from the user's click
-on the confirmation card it shows.
+on the confirmation card it shows. `@Confiqure.Confirm(false)` turns the card off for that operation.
 
 ## Compiling a host
 

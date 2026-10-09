@@ -546,34 +546,136 @@ public @interface Confiqure {
     }
 
     /**
-     * Names YOUR tool method that verifies this field's value, as {@code "ToolClass.method"} — a
-     * domain check only your application can make (a product code exists, an account is open).
-     *
-     * <p>Before the value is set, the engine calls that method with the value (and the record's key
-     * when one exists). It answers ok; not ok with a message, which the user gets; or a corrected
-     * value, which is saved instead. The model sees the annotation in the class source; the
-     * field's comment still guides how it asks. The name is checked at compile time.
+     * Names YOUR format check for this field's value: a {@link Tool} class implementing
+     * {@link ConfiqureValidator}, whose mapped {@code validate} the engine calls before the value is
+     * set, without the chat model. Not ok refuses the value; the user gets {@link #message()}, else
+     * the validator's own message. The compiler checks that the class is a validator; the CLI checks
+     * at push that it is a pushed tool class with {@code validate} mapped.
      *
      * <pre>
-     * &#64;Confiqure.VerifiedBy("CatalogTool.verifyProductCode")
-     * private String productCode;
+     * &#64;Confiqure.ValidatedBy(SkuFormat.class)
+     * private String sku;
      * </pre>
      *
      * @since 3.1
      */
     @Target(ElementType.FIELD)
     @Retention(RetentionPolicy.RUNTIME)
+    @interface ValidatedBy {
+        /** The validating tool class. */
+        Class<? extends ConfiqureValidator<?>> value();
+
+        /** The sentence the user gets when the value is refused. Defaults to the validator's own message. */
+        String message() default "";
+    }
+
+    /**
+     * Names YOUR domain check for this field's value, one only your application can make (a product
+     * code exists, an account is open): a {@link Tool} class implementing {@link ConfiqureVerifier},
+     * whose mapped {@code verify} the engine calls before the value is set, without the chat model.
+     * It answers ok; not ok, and the user gets {@link #message()}, else the verifier's own message;
+     * or a corrected value, which is saved instead and stated. The compiler checks that the class
+     * is a verifier; the CLI checks at push that it is a pushed tool class with {@code verify} mapped.
+     *
+     * <pre>
+     * &#64;Confiqure.VerifiedBy(CatalogCheck.class)
+     * private String productCode;
+     * </pre>
+     *
+     * <p><b>On a request class</b>, the verifier checks the whole request once every field is set,
+     * before the operation is called: it receives {@code {field: the class's simple name, value: the
+     * whole request object, confiqureKey?}}, so it implements {@code ConfiqureVerifier<TheRequest>}.
+     * Not ok makes no call and the user gets the message; a corrected value is the request sent.
+     *
+     * <pre>
+     * &#64;Confiqure.VerifiedBy(PriceRangeCheck.class)   // implements ConfiqureVerifier&lt;PriceRange&gt;
+     * public class PriceRange {
+     *     private BigDecimal min;
+     *     private BigDecimal max;
+     * }
+     * </pre>
+     *
+     * @since 3.1
+     */
+    @Target({ElementType.FIELD, ElementType.TYPE})
+    @Retention(RetentionPolicy.RUNTIME)
     @interface VerifiedBy {
-        /** The verifying operation, {@code "ToolClass.method"}: a method of one of your {@link Tool} classes. */
-        String value();
+        /** The verifying tool class. */
+        Class<? extends ConfiqureVerifier<?>> value();
 
         /** The sentence the user gets when the value is refused. Defaults to the verifier's own message. */
         String message() default "";
     }
 
     /**
-     * Names a verifier Confiqure runs on this field's value, one that needs an outside answer
-     * (today: {@link ValidatorKind#ADDRESS}, the address check).
+     * What the engine sends a {@link ConfiqureValidator} or {@link ConfiqureVerifier}: the field's
+     * name, the value the chat would set, and the record's key when the record exists.
+     *
+     * @param <T> the field's type
+     * @since 3.1
+     */
+    final class Check<T> {
+        private String field;
+        private T value;
+        private String confiqureKey;
+
+        public String getField() { return field; }
+        public void setField(String field) { this.field = field; }
+
+        public T getValue() { return value; }
+        public void setValue(T value) { this.value = value; }
+
+        /** The record's key; null when the value belongs to a record not yet created. */
+        public String getConfiqureKey() { return confiqureKey; }
+        public void setConfiqureKey(String confiqureKey) { this.confiqureKey = confiqureKey; }
+    }
+
+    /**
+     * A check's answer: ok, not ok with a message, or (a verifier only) a corrected value. Build it
+     * with {@link #ok()}, {@link #notOk(String)} or {@link #corrected(Object)}.
+     *
+     * @param <T> the corrected value's type; {@code Void} for a validator, which cannot correct
+     * @since 3.1
+     */
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    final class Verdict<T> {
+        private boolean ok;
+        private String message;
+        private T value;
+
+        /** For JSON binding; build answers with the factories. */
+        public Verdict() {}
+
+        private Verdict(boolean ok, String message, T value) {
+            this.ok = ok;
+            this.message = message;
+            this.value = value;
+        }
+
+        /** The value is good as given. */
+        public static <T> Verdict<T> ok() { return new Verdict<>(true, null, null); }
+
+        /** The value is refused; the user gets {@code message} unless the field declares its own. */
+        public static <T> Verdict<T> notOk(String message) { return new Verdict<>(false, message, null); }
+
+        /** The value is good in this form instead: it is saved, and the user is told. */
+        public static <T> Verdict<T> corrected(T value) { return new Verdict<>(true, null, value); }
+
+        public boolean isOk() { return ok; }
+        public void setOk(boolean ok) { this.ok = ok; }
+
+        public String getMessage() { return message; }
+        public void setMessage(String message) { this.message = message; }
+
+        /** The corrected value; null when the value stands as given. */
+        public T getValue() { return value; }
+        public void setValue(T value) { this.value = value; }
+    }
+
+    /**
+     * Names a check Confiqure itself runs on this field's value, with no call to you (today:
+     * {@link ValidatorKind#ADDRESS}, the address check, and {@link ValidatorKind#PRODUCT_CODE}, the
+     * product-code check).
      *
      * <p>The engine runs it before the value is set and saves the corrected value it returns (a
      * checked address, at once), or refuses the value with one plain sentence naming the field.
@@ -587,6 +689,9 @@ public @interface Confiqure {
      * <pre>
      * &#64;Confiqure.Verify(Confiqure.ValidatorKind.ADDRESS)
      * private Address shipFrom;
+     *
+     * &#64;Confiqure.Verify(Confiqure.ValidatorKind.PRODUCT_CODE)
+     * private String barcode;
      * </pre>
      *
      * @since 3.1
@@ -598,10 +703,17 @@ public @interface Confiqure {
         ValidatorKind value();
     }
 
-    /** The verifiers Confiqure runs for {@link Verify}. More join later. */
+    /** The checks Confiqure runs for {@link Verify}. More join later. */
     enum ValidatorKind {
         /** A postal address, checked and returned in its corrected form. */
-        ADDRESS
+        ADDRESS,
+        /**
+         * A product code, checked by the engine with no call to you: a GTIN-8, -12, -13 or -14 with
+         * a valid check digit (UPC-A, EAN-13 and ISBN-13 are GTINs), an ISBN-10 with a valid check
+         * digit ({@code X} allowed last), or an ASIN ({@code B0} followed by 8 letters or digits).
+         * Spaces and dashes are ignored. Not ok: one plain sentence naming the field.
+         */
+        PRODUCT_CODE
     }
 
     /**
@@ -625,6 +737,9 @@ public @interface Confiqure {
     @Target(ElementType.METHOD)
     @Retention(RetentionPolicy.RUNTIME)
     @interface Confirm {
+        /** {@code true} (the default): the card is shown. {@code false}: no card for this operation. */
+        boolean value() default true;
+
         /** The card's question to the user. Defaults to the engine's own words for the operation. */
         String text() default "";
     }

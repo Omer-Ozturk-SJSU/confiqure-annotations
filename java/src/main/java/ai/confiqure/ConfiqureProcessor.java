@@ -23,8 +23,7 @@ import java.util.Set;
     "ai.confiqure.Confiqure.Setting",
     "ai.confiqure.Confiqure.List",
     "ai.confiqure.Confiqure.User.Setting",
-    "ai.confiqure.Confiqure.User.List",
-    "ai.confiqure.Confiqure.VerifiedBy"})
+    "ai.confiqure.Confiqure.User.List"})
 public class ConfiqureProcessor extends AbstractProcessor {
 
     /** Every annotation that marks a class as a saveable object: each gets a {@code confiqureKey}. */
@@ -58,7 +57,7 @@ public class ConfiqureProcessor extends AbstractProcessor {
             this.initialized = true;
         } catch (Exception | LinkageError e) {
             // Without the javac exports the internal API calls throw IllegalAccessError, an Error: caught here too, so the
-            // host's compile carries on with this warning (and the VerifiedBy check) instead of aborting.
+            // host's compile carries on with this warning instead of aborting.
             processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING,
                 "[confiqure] processor could not initialize. Add the following to your maven-compiler-plugin compilerArgs:\n" +
                 FLAGS + "\nError: " + e.getMessage());
@@ -79,23 +78,8 @@ public class ConfiqureProcessor extends AbstractProcessor {
         "  -J--add-opens=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED\n" +
         "and <fork>true</fork> on the maven-compiler-plugin (the -J options reach only a forked javac).";
 
-    /** {@code ToolClass.method}: two Java identifiers joined by one dot. */
-    static final java.util.regex.Pattern VERIFIED_BY = java.util.regex.Pattern.compile(
-        "[A-Za-z_$][A-Za-z0-9_$]*\\.[A-Za-z_$][A-Za-z0-9_$]*");
-
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        // 3.1: @Confiqure.VerifiedBy names "ToolClass.method"; a malformed name fails the compile, not a chat. Needs no
-        // javac internals, so it runs even when the confiqureKey injection below could not initialize.
-        for (Element element : roundEnv.getElementsAnnotatedWith(Confiqure.VerifiedBy.class)) {
-            String value = element.getAnnotation(Confiqure.VerifiedBy.class).value();
-            if (value == null || !VERIFIED_BY.matcher(value.strip()).matches()) {
-                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
-                    "[confiqure] @Confiqure.VerifiedBy(\"" + value + "\") on " + element.getSimpleName()
-                        + " must name a tool operation as \"ToolClass.method\", e.g. \"CatalogTool.verifyProductCode\".",
-                    element);
-            }
-        }
         if (!initialized) {
             // Review 10976: an object class compiled without its confiqureKey breaks the host DTO contract, so it is a
             // readable compile error naming the class and the flags; a class with no object annotation compiles as before.
