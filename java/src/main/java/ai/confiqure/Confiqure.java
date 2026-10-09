@@ -749,11 +749,13 @@ public @interface Confiqure {
     /**
      * Opts a {@link List} (or {@link User.List}) object OUT of chat deletion. By default a List
      * object's records can be deleted from chat — the user asks, the engine shows a
-     * direct-bind confirmation card, and only the user's click disposes (soft-delete; the data is
-     * staff-recoverable, and your application is notified via the {@code config.deleted} /
-     * {@code config.bulk_deleted} lifecycle webhooks). Add {@code @Confiqure.Protect} to a class
-     * whose instances must NEVER be chat-deletable — audit logs, immutable records, anything whose
-     * removal should only ever happen through your own application:
+     * direct-bind confirmation card, and only the user's yes disposes: a click on the card, or a
+     * typed answer that one model call for that card reads as answering it; never the chat model's
+     * own word (soft-delete; the data is staff-recoverable, and your application is notified via
+     * the {@code config.deleted} / {@code config.bulk_deleted} lifecycle webhooks). Add
+     * {@code @Confiqure.Protect} to a class whose instances must NEVER be chat-deletable — audit
+     * logs, immutable records, anything whose removal should only ever happen through your own
+     * application:
      *
      * <pre>
      * &#64;Confiqure.List(end = "/audit-entries")
