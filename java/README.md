@@ -59,7 +59,11 @@ a page of your application. The engine does not offer such an operation to a cha
 page would leave the conversation; on the web it runs as before. An operation without `@Confiqure.Effect` is
 `OperationEffect.NONE`. The effect does not change where the operation runs (`@Confiqure.Browser`,
 `@Confiqure.Async`). Pushing it needs `@confiqure/cli` 1.2.0, which carries each operation's effect in the push and
-stops the push when a declared effect cannot be read.
+stops the push when a declared effect cannot be read. CLI 1.2.0 sends an explicit `NONE` for an operation without the
+annotation, so removing it clears an earlier `PAGE_OPENING`.
+
+Use `@Confiqure.Effect` and CLI 1.2.0 only once the engine that reads the effect is live on your workspace: an older
+engine rejects the field CLI 1.2.0 sends, and the push fails. Until then, stay on CLI 1.1.
 
 ## Compiling a host
 

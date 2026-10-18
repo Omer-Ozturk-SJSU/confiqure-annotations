@@ -5,7 +5,9 @@
 - `@Confiqure.Effect(OperationEffect)` on a tool operation, with `Confiqure.OperationEffect` `NONE` / `PAGE_OPENING`:
   a `PAGE_OPENING` operation opens a page of your application, and the engine does not offer it to a chat on a mobile
   client. Without the annotation an operation is `NONE`. Additive: nothing existing changes.
-- Pushing it needs `@confiqure/cli` 1.2.0. The mobile rule takes effect with the engine deploy that reads the effect.
+- Pushing it needs `@confiqure/cli` 1.2.0, and CLI 1.2.0 needs the engine that reads the effect: an older engine
+  rejects the field 1.2.0 sends on every operation, so use both only once that engine is live. The mobile rule takes
+  effect with it. An explicit `NONE` (sent for every operation without the annotation) clears an earlier `PAGE_OPENING`.
 
 ## 3.1.0
 
