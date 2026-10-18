@@ -235,8 +235,9 @@ public @interface Confiqure {
     @interface Async {}
 
     /**
-     * Declares what running an operation of a {@link Tool} class does beyond returning its result.
-     * Put it on the operation; without it the operation's effect is {@link OperationEffect#NONE}.
+     * Declares an effect the engine treats specially when an operation of a {@link Tool} class runs
+     * (today: {@link OperationEffect#PAGE_OPENING}). Put it on the operation; without it the
+     * operation's effect is {@link OperationEffect#NONE}.
      * It does not change where the operation runs: {@link Browser} and {@link Async} keep their
      * meaning.
      *
@@ -257,7 +258,10 @@ public @interface Confiqure {
 
     /** The effects an operation can declare with {@link Effect}. */
     enum OperationEffect {
-        /** Nothing beyond its result: the default for an operation without {@link Effect}. */
+        /**
+         * No declared page-opening effect: the default for an operation without {@link Effect}. It
+         * does not mean the operation has no other effect; an ordinary write or a popup is NONE.
+         */
         NONE,
         /**
          * The operation opens or navigates to a page of your application. The engine does not offer
