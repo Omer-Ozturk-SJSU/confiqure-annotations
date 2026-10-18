@@ -52,6 +52,15 @@ only from the user's yes: a click on the card, or a typed answer that one model 
 it; never from the chat model's own word. Without that yes the call is never made. `@Confiqure.Confirm(false)` turns
 the card off for that operation.
 
+## Operation effects (3.2)
+
+`@Confiqure.Effect(Confiqure.OperationEffect.PAGE_OPENING)` on a tool operation declares that it opens or navigates to
+a page of your application. The engine does not offer such an operation to a chat on a mobile client, where opening a
+page would leave the conversation; on the web it runs as before. An operation without `@Confiqure.Effect` is
+`OperationEffect.NONE`. The effect does not change where the operation runs (`@Confiqure.Browser`,
+`@Confiqure.Async`). Pushing it needs `@confiqure/cli` 1.2.0, which carries each operation's effect in the push and
+stops the push when a declared effect cannot be read.
+
 ## Compiling a host
 
 The annotation processor adds a `confiqureKey` to every `@Confiqure.Setting` / `List` class. It runs inside javac's own

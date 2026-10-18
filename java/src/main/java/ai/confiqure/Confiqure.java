@@ -234,6 +234,39 @@ public @interface Confiqure {
     @Retention(RetentionPolicy.RUNTIME)
     @interface Async {}
 
+    /**
+     * Declares what running an operation of a {@link Tool} class does beyond returning its result.
+     * Put it on the operation; without it the operation's effect is {@link OperationEffect#NONE}.
+     * It does not change where the operation runs: {@link Browser} and {@link Async} keep their
+     * meaning.
+     *
+     * <pre>
+     * &#64;Confiqure.Browser
+     * &#64;Confiqure.Effect(Confiqure.OperationEffect.PAGE_OPENING)
+     * public Ack openProductPage(&#64;RequestBody SkuRef ref) { return null; }   // opens a page of your app
+     * </pre>
+     *
+     * @since 3.2
+     */
+    @Target(ElementType.METHOD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Effect {
+        /** The operation's effect. */
+        OperationEffect value();
+    }
+
+    /** The effects an operation can declare with {@link Effect}. */
+    enum OperationEffect {
+        /** Nothing beyond its result: the default for an operation without {@link Effect}. */
+        NONE,
+        /**
+         * The operation opens or navigates to a page of your application. The engine does not offer
+         * it to a chat on a mobile client, where opening a page would leave the conversation; on the
+         * web it runs as before.
+         */
+        PAGE_OPENING
+    }
+
     /** Marks a controller method as the workspace's default callback hook.
      *  Receives lifecycle events (onStart, onComplete, onTimeout) with confiqureKeys. */
     @Target(ElementType.METHOD)

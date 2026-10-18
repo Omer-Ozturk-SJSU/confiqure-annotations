@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.2.0
+
+- `@Confiqure.Effect(OperationEffect)` on a tool operation, with `Confiqure.OperationEffect` `NONE` / `PAGE_OPENING`:
+  a `PAGE_OPENING` operation opens a page of your application, and the engine does not offer it to a chat on a mobile
+  client. Without the annotation an operation is `NONE`. Additive: nothing existing changes.
+- Pushing it needs `@confiqure/cli` 1.2.0. The mobile rule takes effect with the engine deploy that reads the effect.
+
 ## 3.1.0
 
 - Named validators `@Confiqure.Email`, `NAPhoneNumber`, `UKPhoneNumber`, `WorldPhoneNumber` and `USZipCode`.
